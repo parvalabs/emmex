@@ -15,6 +15,22 @@ See `docs/FEASIBILITY.md` for the spike results that shaped the design.
 - For Claude: an API key in the Keychain (`security add-generic-password -s mlex-anthropic -a "$USER" -w`)
   or `ANTHROPIC_API_KEY` in the environment
 
+## What it does
+
+- **Sessions** are saved per workspace and resumable; titles come from the first prompt.
+- **Worktrees**: start a session on a git worktree (created outside the repo) so the main
+  checkout stays untouched.
+- **MCP servers** from `~/.mlex/mcp.json` or `<workspace>/.mlex/mcp.json` (`mcpServers`
+  format, stdio or HTTP) become tools with grammar-constrained arguments.
+- **Skills** (Agent Skills `SKILL.md`) from `.mlex/skills`, `.agents/skills`, `.claude/skills`
+  in the workspace or home, listed to the model and forceable with `/skill:name`.
+- **Prompt templates** in `.mlex/prompts` or `.claude/commands`, with `$1…$9` and `$ARGUMENTS`.
+- **Context files** `AGENTS.md`, `CLAUDE.md`, `.mlex/SYSTEM.md`, `.mlex/APPEND_SYSTEM.md`.
+- **Compaction**: older turns are folded into an on-device summary automatically when the
+  context nears the window, or on demand.
+- **Effort** per message: `off | low | medium | high` (Claude effort, MLX thinking on/off).
+- **Memory-aware model loading**: one MLX model resident at a time, with headroom warnings.
+
 ## CLI
 
 ```bash
@@ -22,18 +38,18 @@ swift build -c release
 .build/release/mlex models list                       # every backend and whether it is ready
 .build/release/mlex models pull mlx-community/Qwen3-8B-4bit
 .build/release/mlex run -m system "How many rows does items.csv have?"
-.build/release/mlex run -m mlx:mlx-community/Qwen3-8B-4bit "…"
-.build/release/mlex run -m pcc "…"
-.build/release/mlex run -m claude:sonnet5 "…"
-.build/release/mlex chat -m system                    # /save <file> and --resume <file>
+.build/release/mlex chat -m mlx:mlx-community/Qwen3-8B-4bit --workspace ~/code/app
+.build/release/mlex chat --worktree feature-x         # session on a fresh worktree
+.build/release/mlex chat --resume 80123aae            # resume by id prefix
+.build/release/mlex sessions list                     # sessions for the current workspace
+.build/release/mlex worktrees list|add|remove
+.build/release/mlex mcp                               # configured MCP servers and their tools
 ```
 
-Model specs: `system`, `pcc`, `claude:<sonnet5|opus5_5|opus4_8|id>`, `mlx:<org/name>`.
+In chat: `/model <spec>`, `/effort <level>`, `/title <text>`, `/compact`, `/context`,
+`/skills`, `/prompts`, `/tools`, `/sessions`, `/skill:<name> [args]`, `/<template> [args]`.
 
-Reasoning effort is per message and off by default: `--effort off|low|medium|high` on `run` and
-`chat` (or `/effort <level>` inside chat), and a picker in the app toolbar. On Claude it sets the
-effort level; on MLX models such as Qwen3 it switches thinking on or off, which on a base M4 is
-the difference between about 12 s and 50 s for a one-line answer.
+Model specs: `system`, `pcc`, `claude:<sonnet5|opus5_5|opus4_8|id>`, `mlx:<org/name>`.
 MLX weights live in `~/.cache/mlex/models/<org>/<name>`. Set `MLEX_USAGE=1` to print token usage.
 
 ## Memory
@@ -51,9 +67,11 @@ warns when it won't fit. In `chat`, `/model <spec>` switches models and keeps th
 open .build/Mlex.app
 ```
 
-Sidebar: workspace folder, every backend with a ready indicator, and a pull field for
-Hugging Face MLX models with live progress. Detail: streaming chat with a tool timeline.
-Switching models keeps the conversation: the new session starts from the old transcript.
+Sidebar: workspace switcher with recents, sessions list, and a worktree option on new
+sessions. Top bar: session title, context usage (click to compact), effort, and a model
+picker. Chat renders markdown with code blocks and collapsible tool cards; `/` in the
+composer suggests skills and templates. Models and Tools sheets manage MLX pulls and show
+MCP servers, skills, and templates. Switching models keeps the conversation.
 Private Cloud Compute needs Apple's managed entitlement and a real signing identity; see
 `scripts/Mlex.entitlements`.
 
