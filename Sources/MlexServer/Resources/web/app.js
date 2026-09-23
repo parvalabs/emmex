@@ -236,7 +236,7 @@ function openTools() {
     sec('Prompt templates', '.mlex/prompts, .claude/commands'); if (!S.templates.length) c.append(el('div', 'small', 'None found.'));
     S.templates.forEach(t => { const r = el('div', 'fact'); r.append(el('span', 'k', 'template'), el('span', '', `/${t.name} ${t.hint || ''} — ${t.description}`)); c.append(r); });
     sec('Memory', 'extracted on-device after each turn'); if (!S.memory.length) c.append(el('div', 'small', 'Nothing remembered yet.'));
-    S.memory.forEach(f => { const r = el('div', 'fact'); r.append(el('span', 'k', f.kind), el('span', '', f.text)); const x = el('button', 'x', '✕'); x.onclick = () => act({ type: 'forget', id: f.id }); r.append(x); c.append(r); });
+    S.memory.forEach(f => { const r = el('div', 'fact'); r.append(el('span', 'k', (f.scope === 'user' ? 'you · ' : '') + f.kind), el('span', '', f.text)); r.title = `used ${f.uses}×`; const x = el('button', 'x', '✕'); x.onclick = () => act({ type: 'forget', id: f.id }); r.append(x); c.append(r); });
     if (S.memory.length) { const b = el('button', 'btn danger', 'Forget everything'); b.onclick = () => act({ type: 'clear_memory' }); c.append(b); }
     sec('Tools in this session'); c.append(el('div', 'small', S.tools.join(', ')));
   });

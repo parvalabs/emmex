@@ -33,9 +33,12 @@ See `docs/FEASIBILITY.md` for the spike results that shaped the design.
   and a key in Keychain service `mlex-jev`. Tiers map to specs in `settings.json` `routes`
   (default `system`, `claude:haiku`, `claude:sonnet5`) with fallback when a backend is missing.
 - **Memory**: after each turn the on-device model extracts durable facts (preferences, decisions,
-  project facts) into a per-workspace store; they are injected at session start and retrieved
-  per message. `mlex memory list|forget|clear`, `/memory` in chat, Memory in the Tools sheet.
-  Disable with `"memory": false` in settings.
+  project facts, references), scoped to the project or to you (user-level facts apply in every
+  workspace). Retrieval uses Apple's on-device sentence embeddings plus keyword overlap, so a
+  differently worded question still finds the fact; duplicates are caught by wording and by
+  embedding similarity; use counts drive pruning. Stored as JSON under Application Support/mlex/
+  memory (one file per workspace plus global.json). `mlex memory list|search|forget|clear`,
+  `/memory` in chat, Memory in the Tools dialog. Disable with `"memory": false` in settings.
 - **Fork and export**: `sessions fork <id> [--before N]`, `/fork N`, "Fork before this message"
   in the app; `sessions export <id> [file.html|.json]`, `/export`, File > Export Session.
 - **Effort** per message: `off | low | medium | high` (Claude effort, MLX thinking on/off).

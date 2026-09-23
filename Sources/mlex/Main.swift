@@ -206,14 +206,25 @@ struct Serve: AsyncParsableCommand {
 
 struct MemoryCmd: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "memory", abstract: "Facts remembered for a workspace.",
-                                                    subcommands: [List.self, Forget.self, Clear.self], defaultSubcommand: List.self)
+                                                    subcommands: [List.self, Search.self, Forget.self, Clear.self], defaultSubcommand: List.self)
+    struct Search: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Show which facts would be retrieved for a prompt.")
+        @Argument var prompt: String
+        @Option(name: .long) var workspace: String?
+        func run() async throws {
+            let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+            let hits = await MemoryStore.shared.relevant(to: prompt, workspace: ws)
+            if hits.isEmpty { print("no relevant facts") }
+            for f in hits { print("  [\(f.scope)/\(f.kind)] \(f.text)") }
+        }
+    }
     struct List: AsyncParsableCommand {
         @Option(name: .long) var workspace: String?
         func run() async throws {
             let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
             let facts = await MemoryStore.shared.facts(workspace: ws)
             if facts.isEmpty { print("nothing remembered for \(ws.path)"); return }
-            for f in facts.sorted(by: { $0.createdAt > $1.createdAt }) { print("\(f.id.prefix(8))  \(f.kind.padding(toLength: 10, withPad: " ", startingAt: 0))  \(f.text)") }
+            for f in facts.sorted(by: { $0.createdAt > $1.createdAt }) { print("\(f.id.prefix(8))  \(f.scope.padding(toLength: 7, withPad: " ", startingAt: 0)) \(f.kind.padding(toLength: 10, withPad: " ", startingAt: 0))  \(f.uses)×  \(f.text)") }
         }
     }
     struct Forget: AsyncParsableCommand {
@@ -318,7 +329,7 @@ struct Chat: AsyncParsableCommand {
                 print("context: \(used) / \(size) tokens"); continue
             }
             if line == "/memory" {
-                for f in await MemoryStore.shared.facts(workspace: ws) { print("  [\(f.kind)] \(f.text)") }
+                for f in await MemoryStore.shared.facts(workspace: ws) { print("  [\(f.scope)/\(f.kind)] \(f.text)") }
                 continue
             }
             if line == "/route" {

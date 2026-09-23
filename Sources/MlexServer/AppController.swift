@@ -69,7 +69,7 @@ public final class AppController {
             "mcpFailures": mcpFailures,
             "skills": commands.skills.map { ["name": $0.name, "description": $0.description] },
             "templates": commands.templates.map { ["name": $0.name, "hint": $0.argumentHint as Any, "description": $0.description] },
-            "memory": memory.sorted { $0.createdAt > $1.createdAt }.map { ["id": $0.id, "kind": $0.kind, "text": $0.text] },
+            "memory": memory.sorted { $0.createdAt > $1.createdAt }.map { ["id": $0.id, "kind": $0.kind, "scope": $0.scope, "text": $0.text, "uses": $0.uses] },
             "tools": current?.toolNames ?? [],
             "nativePanels": canUseNativePanels,
         ]

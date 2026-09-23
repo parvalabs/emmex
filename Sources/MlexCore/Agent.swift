@@ -181,6 +181,7 @@ public final class AgentSession: @unchecked Sendable {
             ? Array(await MemoryStore.shared.facts(workspace: record.workspaceURL).sorted { $0.createdAt > $1.createdAt }.prefix(12))
             : await MemoryStore.shared.relevant(to: prompt, workspace: record.workspaceURL, limit: 5)
         guard !facts.isEmpty else { return prompt }
+        await MemoryStore.shared.markUsed(facts.map(\.id), workspace: record.workspaceURL)
         return "Relevant memory:\n" + facts.map { "- \($0.text)" }.joined(separator: "\n") + "\n\n" + prompt
     }
 
@@ -193,7 +194,7 @@ public final class AgentSession: @unchecked Sendable {
         do {
             let facts = try await MemoryExtractor.extract(prompt: prompt, response: response, toolSummary: tools)
             let added = try await MemoryStore.shared.add(facts, workspace: record.workspaceURL, source: record.id)
-            if added > 0 { sink(.info("remembered: " + facts.prefix(added).map(\.text).joined(separator: " · "))) }
+            if !added.isEmpty { sink(.info("remembered: " + added.map { ($0.scope == "user" ? "[you] " : "") + $0.text }.joined(separator: " · "))) }
         } catch {
             // Memory is best effort; never fail the turn over it.
         }
@@ -243,7 +244,7 @@ public final class AgentSession: @unchecked Sendable {
             let prefs = facts.filter { $0.kind == "preference" }.sorted { $0.createdAt > $1.createdAt }
             let others = facts.filter { $0.kind != "preference" }.sorted { $0.createdAt > $1.createdAt }
             let picked = Array((prefs + others).prefix(small ? 6 : 15))
-            if let mem = MemoryStore.promptSection(picked) { parts.append(mem) }
+            if let mem = MemoryStore.promptSection(picked) { parts.append(mem); await MemoryStore.shared.markUsed(picked.map(\.id), workspace: workspace) }
         }
         return parts.joined(separator: "\n\n")
     }
