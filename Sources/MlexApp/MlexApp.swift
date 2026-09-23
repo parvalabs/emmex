@@ -30,6 +30,7 @@ struct MlexApp: App {
                 Button("New Session") { model.newSession() }.keyboardShortcut("n")
                 Button("Open Folder…") { model.chooseWorkspace() }.keyboardShortcut("o")
                 Button("Compact Context") { model.compact() }.keyboardShortcut("k", modifiers: [.command, .shift])
+                Button("Export Session…") { model.exportSession() }.keyboardShortcut("e", modifiers: [.command, .shift])
             }
         }
     }

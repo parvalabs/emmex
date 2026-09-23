@@ -45,8 +45,8 @@ public struct SessionSummary: Identifiable, Sendable, Hashable {
 
 /// Sessions live at Application Support/mlex/sessions/<workspace-key>/<id>.json.
 public enum SessionStore {
-    static let encoder: JSONEncoder = { let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601; return e }()
-    static let decoder: JSONDecoder = { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d }()
+    public static let encoder: JSONEncoder = { let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601; return e }()
+    public static let decoder: JSONDecoder = { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d }()
 
     public static func directory(for workspace: URL) -> URL {
         Paths.sessions.appending(path: Paths.key(for: workspace))

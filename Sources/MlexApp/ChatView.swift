@@ -118,6 +118,7 @@ struct EmptyState: View {
 }
 
 struct TimelineRow: View {
+    @Environment(AppModel.self) private var model
     let item: TimelineItem
     @State private var expanded = false
 
@@ -128,6 +129,12 @@ struct TimelineRow: View {
                 Text(item.text).font(Theme.body).textSelection(.enabled)
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(Theme.accent.opacity(0.13), in: RoundedRectangle(cornerRadius: 12))
+                    .contextMenu {
+                        if let t = item.userTurn, let id = model.current?.record.id {
+                            Button("Fork before this message") { model.fork(id, beforeUserTurn: t) }
+                            Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(item.text, forType: .string) }
+                        }
+                    }
             }
         case .assistant:
             MarkdownView(text: item.text).padding(.trailing, 40)
@@ -193,18 +200,36 @@ struct Composer: View {
                 .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radius))
                 .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.hairline, lineWidth: 0.5))
             }
+            if !model.queue.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "text.line.first.and.arrowtriangle.forward").font(Theme.small)
+                    ForEach(Array(model.queue.enumerated()), id: \.offset) { _, q in
+                        Text(q).font(Theme.small).lineLimit(1).padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Theme.surface, in: Capsule()).overlay(Capsule().stroke(Theme.hairline, lineWidth: 0.5))
+                    }
+                    Spacer()
+                    Button("Clear") { model.queue.removeAll() }.buttonStyle(.plain).font(Theme.small)
+                }.foregroundStyle(Theme.muted)
+            }
             HStack(alignment: .bottom, spacing: 8) {
-                TextField(model.current == nil ? "Choose a folder to start" : "Ask \(model.selected.description)…  (⌘↩ to send, / for commands)",
+                TextField(model.current == nil ? "Choose a folder to start" : (model.busy ? "Type a follow-up; it is sent when this turn finishes" : "Ask \(model.selected.description)…  (⌘↩ to send, / for commands)"),
                           text: $model.input, axis: .vertical)
                     .textFieldStyle(.plain).font(Theme.body).lineLimit(1...10).focused($focused)
                     .onSubmit { if !NSEvent.modifierFlags.contains(.shift) { model.send() } }
+                if model.busy {
+                    Button { model.stop() } label: {
+                        Image(systemName: "stop.fill").font(.system(size: 10, weight: .bold))
+                            .frame(width: 26, height: 26).background(Theme.surface, in: Circle())
+                            .overlay(Circle().stroke(Theme.hairline, lineWidth: 0.5))
+                    }.buttonStyle(.plain).help("Stop this turn").keyboardShortcut(".", modifiers: .command)
+                }
                 Button { model.send() } label: {
                     Image(systemName: "arrow.up").font(.system(size: 12, weight: .bold))
                         .frame(width: 26, height: 26)
-                        .background(model.input.isEmpty || model.busy ? Theme.muted.opacity(0.3) : Theme.accent, in: Circle())
+                        .background(model.input.isEmpty ? Theme.muted.opacity(0.3) : Theme.accent, in: Circle())
                         .foregroundStyle(.white)
                 }
-                .buttonStyle(.plain).disabled(model.busy || model.input.isEmpty || model.current == nil)
+                .buttonStyle(.plain).disabled(model.input.isEmpty || model.current == nil)
                 .keyboardShortcut(.return, modifiers: .command)
             }
             .padding(.horizontal, 12).padding(.vertical, 9)

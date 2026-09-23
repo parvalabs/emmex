@@ -61,6 +61,7 @@ struct SidebarView: View {
                         .onTapGesture { model.resume(s.id) }
                         .contextMenu {
                             Button("Rename…") { model.renaming = s }
+                            Button("Fork") { model.fork(s.id) }
                             if let wt = s.worktree { Button("Reveal worktree \(wt)") { model.revealWorktree(s.id) } }
                             Divider()
                             Button("Delete", role: .destructive) { model.deleteSession(s.id) }

@@ -10,6 +10,7 @@ struct TimelineItem: Identifiable {
     var kind: Kind
     var title: String = ""
     var text: String
+    var userTurn: Int? = nil     // 1-based prompt index, for "fork from here"
 }
 
 @MainActor @Observable
@@ -27,6 +28,9 @@ final class AppModel {
     var busy = false
     /// A prompt sent before the session finished loading; delivered once it is ready.
     private var pending: String?
+    /// Follow-ups typed while a turn is running, sent in order when it finishes.
+    var queue: [String] = []
+    private var runTask: Task<Void, Never>?
     var lastUsage: LanguageModelSession.Usage?
     var contextUsed = 0
     var contextSize = 0
@@ -160,6 +164,32 @@ final class AppModel {
         sessions = SessionStore.list(workspace: ws)
     }
 
+    func fork(_ id: String, beforeUserTurn turn: Int? = nil) {
+        guard let ws = workspace else { return }
+        if current?.record.id == id { try? current?.save() }
+        guard let r = try? SessionStore.load(id, workspace: ws) else { return }
+        let f = r.forked(beforeUserTurn: turn)
+        try? SessionStore.save(f)
+        sessions = SessionStore.list(workspace: ws)
+        resume(f.id)
+    }
+
+    func exportSession() {
+        guard let cur = current else { return }
+        try? cur.save()
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = cur.record.title.prefix(40).replacingOccurrences(of: "/", with: "-") + ".html"
+        panel.allowedContentTypes = [.html, .json]
+        if panel.runModal() == .OK, let url = panel.url {
+            do { try SessionExport.write(cur.record, to: url) } catch { timeline.append(.init(kind: .error, text: "\(error)")) }
+        }
+    }
+
+    func stop() {
+        runTask?.cancel()
+        queue.removeAll()
+    }
+
     func revealWorktree(_ id: String) {
         guard let ws = workspace, let r = try? SessionStore.load(id, workspace: ws) else { return }
         NSWorkspace.shared.activateFileViewerSelecting([r.cwdURL])
@@ -197,9 +227,10 @@ final class AppModel {
     /// Rebuild the timeline from a saved transcript.
     private func replay(_ t: Transcript) {
         func text(_ segs: [Transcript.Segment]) -> String { segs.compactMap { if case .text(let s) = $0 { s.content } else { nil } }.joined() }
+        var turn = 0
         for e in t {
             switch e {
-            case .prompt(let p): timeline.append(.init(kind: .user, text: text(p.segments)))
+            case .prompt(let p): turn += 1; timeline.append(.init(kind: .user, text: text(p.segments), userTurn: turn))
             case .response(let r): timeline.append(.init(kind: .assistant, text: text(r.segments)))
             case .toolCalls(let c): for call in c { timeline.append(.init(kind: .toolCall, title: call.toolName, text: call.arguments.jsonString)) }
             case .toolOutput(let o): timeline.append(.init(kind: .toolResult, title: o.toolName, text: text(o.segments)))
@@ -221,7 +252,8 @@ final class AppModel {
 
     func send() {
         let raw = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !raw.isEmpty, !busy else { return }
+        guard !raw.isEmpty else { return }
+        if busy, current != nil { queue.append(raw); input = ""; return }
         guard let cur = current else {
             // Session still loading (or no workspace yet): keep the prompt and deliver it on load.
             if workspace != nil { pending = raw; input = ""; busy = true; debug("queued prompt until session ready") }
@@ -231,15 +263,19 @@ final class AppModel {
         if raw == "/compact" { compact(); return }
         if raw == "/new" { newSession(); return }
         let prompt = commands.expand(raw) ?? raw
-        timeline.append(.init(kind: .user, text: raw))
+        let turn = (timeline.compactMap(\.userTurn).max() ?? 0) + 1
+        timeline.append(.init(kind: .user, text: raw, userTurn: turn))
         busy = true
         debug("run start: \(prompt.prefix(60))")
-        Task {
+        runTask = Task {
             do { try await cur.run(prompt, effort: effort); debug("run done") }
+            catch is CancellationError { timeline.append(.init(kind: .info, text: "stopped")) }
             catch { debug("run error: \(error)"); timeline.append(.init(kind: .error, text: "\(error)")) }
             await updateContext()
             busy = false
+            runTask = nil
             if let ws = workspace { sessions = SessionStore.list(workspace: ws) }
+            if !queue.isEmpty { input = queue.removeFirst(); send() }
         }
     }
 

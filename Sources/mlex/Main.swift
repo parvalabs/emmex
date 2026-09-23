@@ -71,7 +71,29 @@ struct Models: AsyncParsableCommand {
 
 struct Sessions: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "sessions", abstract: "List or delete saved sessions.",
-                                                    subcommands: [List.self, Delete.self, Inspect.self], defaultSubcommand: List.self)
+                                                    subcommands: [List.self, Delete.self, Inspect.self, Fork.self, Export.self], defaultSubcommand: List.self)
+    struct Fork: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Copy a session into a new one, optionally cut before a user turn.")
+        @Argument var id: String
+        @Option(name: .long, help: "Cut before this user turn (1-based); default keeps everything.") var before: Int?
+        func run() async throws {
+            guard let r = try SessionStore.find(id) else { throw ValidationError("no session matching \(id)") }
+            let f = r.forked(beforeUserTurn: before)
+            try SessionStore.save(f)
+            print("forked \(r.id.prefix(8)) → \(f.id.prefix(8)) “\(f.title)” (\(f.userTurns) user turns kept)")
+        }
+    }
+    struct Export: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Export a session to HTML (or JSON if the path ends in .json).")
+        @Argument var id: String
+        @Argument(help: "Output path; default <id>.html in the current directory.") var path: String?
+        func run() async throws {
+            guard let r = try SessionStore.find(id) else { throw ValidationError("no session matching \(id)") }
+            let url = URL(fileURLWithPath: path ?? "\(r.id.prefix(8)).html")
+            try SessionExport.write(r, to: url)
+            print("exported to \(url.path)")
+        }
+    }
     struct Inspect: AsyncParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Print a session's transcript entries and probe which prefix the on-device tokenizer rejects.")
         @Argument var id: String
@@ -255,6 +277,22 @@ struct Chat: AsyncParsableCommand {
             }
             if line.hasPrefix("/title") {
                 agent.rename(line.dropFirst(6).trimmingCharacters(in: .whitespaces)); print("title: \(agent.record.title)"); continue
+            }
+            if line.hasPrefix("/export") {
+                let p = line.dropFirst(7).trimmingCharacters(in: .whitespaces)
+                let url = URL(fileURLWithPath: p.isEmpty ? "\(agent.record.id.prefix(8)).html" : p)
+                do { try agent.save(); try SessionExport.write(agent.record, to: url); print("exported to \(url.path)") } catch { print("error: \(error)") }
+                continue
+            }
+            if line.hasPrefix("/fork") {
+                let n = Int(line.dropFirst(5).trimmingCharacters(in: .whitespaces))
+                do {
+                    try agent.save()
+                    let f = agent.record.forked(beforeUserTurn: n); try SessionStore.save(f)
+                    agent = try await AgentSession(record: f, spec: nil, mcp: mcp, sink: Printer.print)
+                    print("now in fork \(f.id.prefix(8)) (\(f.userTurns) user turns kept)")
+                } catch { print("error: \(error)") }
+                continue
             }
             if line == "/sessions" {
                 for s in SessionStore.list(workspace: ws) { print("  \(s.id.prefix(8))  \(s.turns) turns  \(s.title)") }
