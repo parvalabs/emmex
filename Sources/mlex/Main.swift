@@ -205,6 +205,14 @@ struct Chat: AsyncParsableCommand {
             guard let line = readLine(), !line.isEmpty, line != "/quit", line != "/exit" else { break }
             if line == "/skills" { for k in commands.skills { print("  /skill:\(k.name)  \(k.description.prefix(90))") }; continue }
             if line == "/prompts" { for t in commands.templates { print("  /\(t.name) \(t.argumentHint ?? "")  \(t.description.prefix(90))") }; continue }
+            if line == "/compact" {
+                do { if let sum = try await agent.compact() { print("summary:\n\(sum)") } else { print("nothing to compact") } } catch { print("error: \(error)") }
+                continue
+            }
+            if line == "/context" {
+                let (used, size) = await agent.contextUsage()
+                print("context: \(used) / \(size) tokens"); continue
+            }
             if line == "/tools" { for t in agent.toolNames { print("  \(t)") }; continue }
             if let expanded = commands.expand(line) {
                 do { try await agent.run(expanded, effort: effort); print() } catch { print("\nerror: \(error)") }
@@ -261,6 +269,8 @@ enum Printer {
             }
         case .warning(let w):
             FileHandle.standardError.write(Data("warning: \(w)\n".utf8))
+        case .info(let i):
+            FileHandle.standardOutput.write(Data("\(lineStart ? "" : "\n")  ℹ \(i)\n".utf8)); lineStart = true
         }
     }
 }

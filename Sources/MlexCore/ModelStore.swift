@@ -109,6 +109,15 @@ public actor ModelStore {
         return model
     }
 
+    /// Context length declared by the model's config.json, capped at 32k.
+    public func contextLength(for id: String) -> Int {
+        let url = directory(for: id).appending(path: "config.json")
+        guard let data = try? Data(contentsOf: url), let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return 8192 }
+        let text = obj["text_config"] as? [String: Any] ?? obj
+        let n = (text["max_position_embeddings"] as? Int) ?? (obj["max_position_embeddings"] as? Int) ?? 8192
+        return min(n, 32_768)
+    }
+
     /// Free the resident model's weights. The next use reloads from disk.
     public func unloadResident() async {
         guard let id = residentID else { return }

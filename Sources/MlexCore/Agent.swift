@@ -38,11 +38,13 @@ public final class AgentSession: @unchecked Sendable {
         let spec = spec ?? record.spec
         record.model = spec.description
         self.spec = spec; self.cwd = record.cwd; self.sink = sink; self.record = record
+        self.mcpHost = mcp
         let ctx = ToolContext(cwd: record.cwd, report: sink)
         var tools = Tools.standard(ctx)
         if let mcp { tools += await mcp.tools(ctx: ctx) }
         self.toolNames = tools.map(\.name)
         let base = instructions ?? Self.defaultInstructions
+        self.baseInstructions = base
         self.session = try await Backends.makeSession(
             spec, tools: tools,
             instructions: Self.compose(base, workspace: record.workspaceURL, cwd: record.cwdURL, spec: spec),
@@ -73,9 +75,65 @@ public final class AgentSession: @unchecked Sendable {
         if autosave { try? save() }
     }
 
+    /// Automatic compaction when the transcript nears the context window.
+    public var autoCompact = true
+    /// Input tokens reported by the last response, the best context estimate for cloud/MLX models.
+    public private(set) var lastInputTokens: Int?
+
+    /// (tokens used, context window) for the current session.
+    public func contextUsage() async -> (used: Int, size: Int) {
+        let (_, used, size) = await Compactor.shouldCompact(session: session, spec: spec, lastInputTokens: lastInputTokens)
+        return (used, size)
+    }
+    private var mcpHost: MCPHost?
+    private var baseInstructions: String
+
+    /// Replace the live session with one built from `transcript` (same model, tools, instructions).
+    func rebuild(with transcript: Transcript) async throws {
+        let ctx = ToolContext(cwd: record.cwd, report: sink)
+        var tools = Tools.standard(ctx)
+        if let mcpHost { tools += await mcpHost.tools(ctx: ctx) }
+        session = try await Backends.makeSession(spec, tools: tools, instructions: nil, transcript: transcript,
+                                                 onWarning: { [sink] in sink(.warning($0)) })
+    }
+
+    /// Fold older turns into a summary. Returns the summary, or nil if there was nothing to fold.
+    @discardableResult
+    public func compact() async throws -> String? {
+        let before = await Compactor.tokensUsed(session: session, spec: spec, lastInputTokens: lastInputTokens)
+        let (t, summary, dropped) = try await Compactor.compact(transcript: session.transcript)
+        guard dropped > 0 else { return nil }
+        try await rebuild(with: t)
+        lastInputTokens = nil
+        let after = await Compactor.tokensUsed(session: session, spec: spec, lastInputTokens: nil)
+        sink(.info("compacted \(dropped) entries: ~\(before) → ~\(after) tokens"))
+        if autosave { try? save() }
+        return summary
+    }
+
     /// Run one user turn, streaming text deltas and tool events to the sink. Returns the final text.
     @discardableResult
     public func run(_ prompt: String, effort: Effort = .default) async throws -> String {
+        if autoCompact {
+            let (needed, used, size) = await Compactor.shouldCompact(session: session, spec: spec, lastInputTokens: lastInputTokens)
+            if needed, try await compact() == nil { sink(.info("context \(used)/\(size) tokens; nothing old enough to compact yet")) }
+        }
+        do {
+            return try await runOnce(prompt, effort: effort)
+        } catch let error as LanguageModelSession.GenerationError {
+            guard case .exceededContextWindowSize = error, autoCompact else { throw error }
+            sink(.info("context window exceeded, compacting and retrying…"))
+            try await compact()
+            return try await runOnce(prompt, effort: effort)
+        } catch let error as LanguageModelError {
+            guard case .contextSizeExceeded = error, autoCompact else { throw error }
+            sink(.info("context window exceeded, compacting and retrying…"))
+            try await compact()
+            return try await runOnce(prompt, effort: effort)
+        }
+    }
+
+    private func runOnce(_ prompt: String, effort: Effort) async throws -> String {
         var last = ""
         let stream = session.streamResponse(to: prompt, contextOptions: effort.contextOptions(for: spec))
         var usage: LanguageModelSession.Usage? = nil
@@ -89,6 +147,7 @@ public final class AgentSession: @unchecked Sendable {
             last = full
             usage = snapshot.usage
         }
+        if let u = usage, u.input.totalTokenCount > 0 { lastInputTokens = u.input.totalTokenCount + u.output.totalTokenCount }
         sink(.finished(usage: usage, text: last))
         record.turns += 1
         if record.turns == 1, record.title == "New session" {

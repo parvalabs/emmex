@@ -140,6 +140,7 @@ final class AppModel {
             case .toolResult(let n, let o): "toolResult \(n): \(o.prefix(80))"
             case .finished(let u, let text): "finished in=\(u?.input.totalTokenCount ?? 0) out=\(u?.output.totalTokenCount ?? 0) text=\(text.prefix(80))"
             case .warning(let w): "warning: \(w)"
+            case .info(let i): "info: \(i)"
             }
             FileHandle.standardError.write(Data("[mlex] \(line)\n".utf8))
         }
@@ -159,6 +160,8 @@ final class AppModel {
             footprint = SystemMemory.footprint()
         case .warning(let w):
             timeline.append(.init(kind: .warning, text: w))
+        case .info(let i):
+            timeline.append(.init(kind: .warning, text: i))
         }
     }
 }
