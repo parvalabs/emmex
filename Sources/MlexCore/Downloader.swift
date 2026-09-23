@@ -17,7 +17,8 @@ public enum HFDownloader {
         return try JSONDecoder().decode(Info.self, from: data).siblings.map { .init(path: $0.rfilename, size: $0.size ?? 0) }
     }
 
-    /// Downloads every entry matching `patterns` into `dest`, skipping files already complete.
+    /// Downloads every entry matching `patterns` into `dest`, skipping files already complete
+    /// and resuming `.part` files left by a cancelled pull. Honors Task cancellation.
     /// `progress` receives (bytesDone, bytesTotal, currentFile) about every 100 ms.
     public static func download(repo: String, revision: String = "main", into dest: URL,
                                 matching patterns: [String] = ["*.safetensors", "*.json", "*.txt", "*.jinja", "*.model", "*.tiktoken"],
@@ -35,29 +36,51 @@ public enum HFDownloader {
                 done += e.size; progress(done, total, e.path); continue
             }
             try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Task.checkCancellation()
             let url = URL(string: "https://huggingface.co/\(repo)/resolve/\(revision)/\(e.path)")!
             var req = URLRequest(url: url)
             if let t = ProcessInfo.processInfo.environment["HF_TOKEN"] { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+            // Resume a partial file from a cancelled pull.
+            let tmp = target.appendingPathExtension("part")
+            var offset: Int64 = 0
+            if let attrs = try? fm.attributesOfItem(atPath: tmp.path), let size = attrs[.size] as? Int64, size > 0, size < e.size {
+                offset = size
+                req.setValue("bytes=\(offset)-", forHTTPHeaderField: "Range")
+            } else if fm.fileExists(atPath: tmp.path) {
+                try fm.removeItem(at: tmp)
+            }
             let (bytes, resp) = try await URLSession.shared.bytes(for: req)
-            guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
+            guard let http = resp as? HTTPURLResponse, http.statusCode == 200 || http.statusCode == 206 else {
                 throw DownloadError.http((resp as? HTTPURLResponse)?.statusCode ?? -1, e.path)
             }
-            let tmp = target.appendingPathExtension("part")
-            fm.createFile(atPath: tmp.path, contents: nil)
-            let handle = try FileHandle(forWritingTo: tmp)
-            defer { try? handle.close() }
-            var buffer = Data(); buffer.reserveCapacity(1 << 20)
-            var fileDone: Int64 = 0
-            var lastReport = Date.distantPast
-            for try await byte in bytes {
-                buffer.append(byte)
-                if buffer.count >= 1 << 20 {
-                    try handle.write(contentsOf: buffer); fileDone += Int64(buffer.count); buffer.removeAll(keepingCapacity: true)
-                    if Date().timeIntervalSince(lastReport) > 0.1 { lastReport = Date(); progress(done + fileDone, total, e.path) }
-                }
+            if http.statusCode == 200 {   // server ignored the Range header: start over
+                offset = 0
+                if fm.fileExists(atPath: tmp.path) { try fm.removeItem(at: tmp) }
             }
-            if !buffer.isEmpty { try handle.write(contentsOf: buffer); fileDone += Int64(buffer.count) }
-            try handle.close()
+            if !fm.fileExists(atPath: tmp.path) { fm.createFile(atPath: tmp.path, contents: nil) }
+            let handle = try FileHandle(forWritingTo: tmp)
+            try handle.seekToEnd()
+            var buffer = Data(); buffer.reserveCapacity(1 << 20)
+            var fileDone: Int64 = offset
+            var lastReport = Date.distantPast
+            progress(done + fileDone, total, e.path)
+            do {
+                for try await byte in bytes {
+                    buffer.append(byte)
+                    if buffer.count >= 1 << 20 {
+                        try handle.write(contentsOf: buffer); fileDone += Int64(buffer.count); buffer.removeAll(keepingCapacity: true)
+                        if Date().timeIntervalSince(lastReport) > 0.1 { lastReport = Date(); progress(done + fileDone, total, e.path) }
+                        try Task.checkCancellation()
+                    }
+                }
+                if !buffer.isEmpty { try handle.write(contentsOf: buffer); fileDone += Int64(buffer.count) }
+                try handle.close()
+            } catch {
+                // Keep the .part file so the next pull resumes from here.
+                if !buffer.isEmpty { try? handle.write(contentsOf: buffer) }
+                try? handle.close()
+                throw error
+            }
             if fm.fileExists(atPath: target.path) { try fm.removeItem(at: target) }
             try fm.moveItem(at: tmp, to: target)
             done += fileDone

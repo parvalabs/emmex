@@ -37,12 +37,12 @@ struct Models: AsyncParsableCommand {
     }
 
     struct Pull: AsyncParsableCommand {
-        static let configuration = CommandConfiguration(abstract: "Download an MLX model from Hugging Face, e.g. mlx-community/Qwen3-8B-4bit")
+        static let configuration = CommandConfiguration(abstract: "Download an MLX model from Hugging Face, e.g. mlx-community/Qwen3-8B-4bit. Ctrl-C stops; running pull again resumes.")
         @Argument var id: String
         func run() async throws {
             let store = ModelStore.shared
             if await store.isInstalled(id) { print("already installed: \(id)"); return }
-            print("pulling \(id) …")
+            print(await store.isPartial(id) ? "resuming \(id) …" : "pulling \(id) …")
             let dest = try await store.pull(id) { fraction, detail in
                 let pct = Int(fraction * 100)
                 FileHandle.standardError.write(Data("\r  \(pct)% \(detail)          ".utf8))

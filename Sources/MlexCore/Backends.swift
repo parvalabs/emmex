@@ -25,6 +25,10 @@ public enum Backends {
             out.append(.init(spec: "mlx:\(m.id)", available: true,
                              detail: ByteCountFormatter.string(fromByteCount: m.sizeBytes, countStyle: .file)))
         }
+        for m in await ModelStore.shared.partial() {
+            out.append(.init(spec: "mlx:\(m.id)", available: false,
+                             detail: "partial download (\(ByteCountFormatter.string(fromByteCount: m.sizeBytes, countStyle: .file))); pull again to resume"))
+        }
         return out
     }
 

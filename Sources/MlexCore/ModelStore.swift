@@ -25,12 +25,30 @@ public actor ModelStore {
 
     public func directory(for id: String) -> URL { root.appending(path: id) }
 
+    static let marker = ".mlex-complete"
+
+    /// Installed means the pull finished: a completion marker is written after the last file.
     public func isInstalled(_ id: String) -> Bool {
-        FileManager.default.fileExists(atPath: directory(for: id).appending(path: "config.json").path)
+        FileManager.default.fileExists(atPath: directory(for: id).appending(path: Self.marker).path)
     }
 
-    /// Every `<org>/<name>` directory under root that has a config.json.
+    /// A directory exists for the model but the pull never completed.
+    public func isPartial(_ id: String) -> Bool {
+        let dir = directory(for: id)
+        return !isInstalled(id) && FileManager.default.fileExists(atPath: dir.path)
+    }
+
+    /// Model directories whose pull was interrupted; pulling again resumes them.
+    public func partial() -> [Installed] {
+        scan().filter { !isInstalled($0.id) }
+    }
+
+    /// Every completed `<org>/<name>` model under root.
     public func installed() -> [Installed] {
+        scan().filter { isInstalled($0.id) }
+    }
+
+    private func scan() -> [Installed] {
         let fm = FileManager.default
         guard let orgs = try? fm.contentsOfDirectory(atPath: root.path) else { return [] }
         var out: [Installed] = []
@@ -39,7 +57,7 @@ public actor ModelStore {
             guard let names = try? fm.contentsOfDirectory(atPath: orgURL.path) else { continue }
             for name in names where !name.hasPrefix(".") {
                 let dir = orgURL.appending(path: name)
-                guard fm.fileExists(atPath: dir.appending(path: "config.json").path) else { continue }
+                guard (try? fm.contentsOfDirectory(atPath: dir.path))?.isEmpty == false else { continue }
                 out.append(.init(id: "\(org)/\(name)", directory: dir, sizeBytes: Self.size(of: dir)))
             }
         }
@@ -55,6 +73,7 @@ public actor ModelStore {
             progress(total > 0 ? Double(done) / Double(total) : 0,
                      "\(f.string(fromByteCount: done)) of \(f.string(fromByteCount: total)) · \(file)")
         }
+        FileManager.default.createFile(atPath: dest.appending(path: Self.marker).path, contents: Data())
         return dest
     }
 
