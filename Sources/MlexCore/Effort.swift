@@ -13,6 +13,7 @@ public enum Effort: String, CaseIterable, Sendable, Codable {
     public func contextOptions(for spec: ModelSpec) -> ContextOptions {
         switch (self, spec) {
         case (.off, .mlx): ContextOptions(reasoningLevel: .custom("no_think"))
+        case (_, .auto): ContextOptions()
         case (.off, _): ContextOptions()
         case (.low, _): ContextOptions(reasoningLevel: .light)
         case (.medium, _): ContextOptions(reasoningLevel: .moderate)

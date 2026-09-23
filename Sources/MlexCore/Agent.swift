@@ -39,6 +39,7 @@ public final class AgentSession: @unchecked Sendable {
         record.model = spec.description
         self.spec = spec; self.cwd = record.cwd; self.sink = sink; self.record = record
         self.mcpHost = mcp
+        self.activeSpec = spec == .auto ? await TierResolver.current().spec(for: .local) : spec
         let ctx = ToolContext(cwd: record.cwd, report: sink)
         var tools = Tools.standard(ctx)
         if let mcp { tools += await mcp.tools(ctx: ctx) }
@@ -79,33 +80,60 @@ public final class AgentSession: @unchecked Sendable {
     public var autoCompact = true
     /// Input tokens reported by the last response, the best context estimate for cloud/MLX models.
     public private(set) var lastInputTokens: Int?
+    /// For `auto` sessions: the concrete model currently running and the last routing decision.
+    public private(set) var activeSpec: ModelSpec
+    public private(set) var lastRoute: RouteDecision?
+    private lazy var router: any Router = TierResolver.makeRouter()
+
+    /// The model actually answering: the routed spec for auto sessions, else the session's spec.
+    public var effectiveSpec: ModelSpec { spec == .auto ? activeSpec : spec }
+
+    /// Route the prompt and switch the live session to the chosen tier if needed.
+    func routeIfAuto(_ prompt: String) async {
+        guard spec == .auto else { return }
+        let recent = session.transcript.suffix(4).map(Compactor.render).joined(separator: "\n").suffix(600)
+        do {
+            let decision = try await router.route(.init(prompt: prompt, recent: String(recent), tools: toolNames))
+            lastRoute = decision
+            let resolver = await TierResolver.current()
+            let target = resolver.spec(for: decision.tier)
+            if target != activeSpec {
+                try await rebuild(with: session.transcript, spec: target)
+                activeSpec = target
+            }
+            sink(.info("auto → \(target) (\(decision.tier.rawValue), \(decision.router), \(Int(decision.confidence * 100))%)\(decision.reason.isEmpty ? "" : ": \(decision.reason)")"))
+        } catch {
+            sink(.warning("router failed (\(error)); staying on \(activeSpec)"))
+        }
+    }
 
     /// (tokens used, context window) for the current session.
     public func contextUsage() async -> (used: Int, size: Int) {
-        let (_, used, size) = await Compactor.shouldCompact(session: session, spec: spec, lastInputTokens: lastInputTokens)
+        let (_, used, size) = await Compactor.shouldCompact(session: session, spec: effectiveSpec, lastInputTokens: lastInputTokens)
         return (used, size)
     }
     private var mcpHost: MCPHost?
     private var baseInstructions: String
 
-    /// Replace the live session with one built from `transcript` (same model, tools, instructions).
-    func rebuild(with transcript: Transcript) async throws {
+    /// Replace the live session with one built from `transcript` (same tools and instructions),
+    /// on `spec` if given, else the current effective model.
+    func rebuild(with transcript: Transcript, spec: ModelSpec? = nil) async throws {
         let ctx = ToolContext(cwd: record.cwd, report: sink)
         var tools = Tools.standard(ctx)
         if let mcpHost { tools += await mcpHost.tools(ctx: ctx) }
-        session = try await Backends.makeSession(spec, tools: tools, instructions: nil, transcript: transcript,
+        session = try await Backends.makeSession(spec ?? effectiveSpec, tools: tools, instructions: nil, transcript: transcript,
                                                  onWarning: { [sink] in sink(.warning($0)) })
     }
 
     /// Fold older turns into a summary. Returns the summary, or nil if there was nothing to fold.
     @discardableResult
     public func compact() async throws -> String? {
-        let before = await Compactor.tokensUsed(session: session, spec: spec, lastInputTokens: lastInputTokens)
+        let before = await Compactor.tokensUsed(session: session, spec: effectiveSpec, lastInputTokens: lastInputTokens)
         let (t, summary, dropped) = try await Compactor.compact(transcript: session.transcript)
         guard dropped > 0 else { return nil }
         try await rebuild(with: t)
         lastInputTokens = nil
-        let after = await Compactor.tokensUsed(session: session, spec: spec, lastInputTokens: nil)
+        let after = await Compactor.tokensUsed(session: session, spec: effectiveSpec, lastInputTokens: nil)
         sink(.info("compacted \(dropped) entries: ~\(before) → ~\(after) tokens"))
         if autosave { try? save() }
         return summary
@@ -115,9 +143,10 @@ public final class AgentSession: @unchecked Sendable {
     @discardableResult
     public func run(_ prompt: String, effort: Effort = .default) async throws -> String {
         if autoCompact {
-            let (needed, used, size) = await Compactor.shouldCompact(session: session, spec: spec, lastInputTokens: lastInputTokens)
+            let (needed, used, size) = await Compactor.shouldCompact(session: session, spec: effectiveSpec, lastInputTokens: lastInputTokens)
             if needed, try await compact() == nil { sink(.info("context \(used)/\(size) tokens; nothing old enough to compact yet")) }
         }
+        await routeIfAuto(prompt)
         do {
             return try await runOnce(prompt, effort: effort)
         } catch let error as LanguageModelSession.GenerationError {
@@ -135,7 +164,7 @@ public final class AgentSession: @unchecked Sendable {
 
     private func runOnce(_ prompt: String, effort: Effort) async throws -> String {
         var last = ""
-        let stream = session.streamResponse(to: prompt, contextOptions: effort.contextOptions(for: spec))
+        let stream = session.streamResponse(to: prompt, contextOptions: effort.contextOptions(for: effectiveSpec))
         var usage: LanguageModelSession.Usage? = nil
         for try await snapshot in stream {
             let full = snapshot.content

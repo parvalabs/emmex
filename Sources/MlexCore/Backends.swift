@@ -21,6 +21,11 @@ public enum Backends {
         }
         out.append(.init(spec: "claude:sonnet5", available: Secrets.anthropicKey() != nil,
                          detail: Secrets.anthropicKey() != nil ? "key found" : "no API key"))
+        out.append(.init(spec: "claude:haiku", available: Secrets.anthropicKey() != nil,
+                         detail: Secrets.anthropicKey() != nil ? "Haiku 4.5, the cheap tier" : "no API key"))
+        let r = Settings.load().routes
+        out.insert(.init(spec: "auto", available: true,
+                         detail: "routes each message: local \(r.local) · cheap \(r.cheap) · frontier \(r.frontier)"), at: 0)
         for m in await ModelStore.shared.installed() {
             out.append(.init(spec: "mlx:\(m.id)", available: true,
                              detail: ByteCountFormatter.string(fromByteCount: m.sizeBytes, countStyle: .file)))
@@ -58,11 +63,16 @@ public enum Backends {
                 case "sonnet5", "sonnet": .sonnet5
                 case "opus", "opus5_5", "opus5.5": .opus5_5
                 case "opus4_8", "opus4.8": .opus4_8
+                case "haiku", "haiku4_5", "haiku4.5": ClaudeModel(id: "claude-haiku-4-5-20251001", capabilities: .init(effortLevels: [], structuredOutput: true))
                 default: ClaudeModel(id: name, capabilities: .init(effortLevels: [.low, .high], structuredOutput: true))
             }
             let m = ClaudeLanguageModel(name: model, auth: .apiKey(key))
             if let t = transcript { return LanguageModelSession(model: m, tools: tools, transcript: t) }
             return LanguageModelSession(model: m, tools: tools, instructions: instructions)
+        case .auto:
+            // Sessions on auto start on the local tier; AgentSession re-routes per message.
+            let resolver = await TierResolver.current()
+            return try await makeSession(resolver.spec(for: .local), tools: tools, instructions: instructions, transcript: transcript, onWarning: onWarning)
         case .mlx(let id):
             let (needed, available) = await ModelStore.shared.headroom(for: id)
             if needed > available {

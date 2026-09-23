@@ -1,0 +1,130 @@
+import Foundation
+import FoundationModels
+
+public enum Tier: String, Codable, Sendable, CaseIterable { case local, cheap, frontier }
+
+public struct RouteRequest: Sendable {
+    public var prompt: String
+    public var recent: String          // compact summary of the last few turns
+    public var tools: [String]
+    public init(prompt: String, recent: String, tools: [String]) { self.prompt = prompt; self.recent = recent; self.tools = tools }
+}
+
+public struct RouteDecision: Sendable {
+    public var tier: Tier
+    public var reason: String
+    public var confidence: Double      // 0…1
+    public var router: String
+}
+
+public protocol Router: Sendable {
+    func route(_ req: RouteRequest) async throws -> RouteDecision
+}
+
+/// The tier definitions shared by every router, so decisions mean the same thing everywhere.
+enum TierGuide {
+    static let local = "conversation, greetings, simple questions answerable directly or with one file read or one shell command (file dates, row counts, git status)"
+    static let cheap = "routine multi-step but well-defined work: run tests, rebase/commit, rename or move things, small localized edits, summarize a file"
+    static let frontier = "anything needing real reasoning or judgment: debugging, design decisions, multi-file refactors, ambiguous or high-stakes requests, writing substantial new code"
+}
+
+/// Apple's on-device model as the classifier: guided generation with an enum, so the output is
+/// always one of the tiers. About one to two seconds per decision, offline.
+public struct OnDeviceRouter: Router {
+    public init() {}
+
+    public func route(_ req: RouteRequest) async throws -> RouteDecision {
+        let schema = try GenerationSchema(root: DynamicGenerationSchema(name: "Route", properties: [
+            .init(name: "tier", description: "Which tier should handle this request", schema: SchemaBuilder.choice("Tier", Tier.allCases.map(\.rawValue))),
+            .init(name: "confidence", description: "How sure you are", schema: SchemaBuilder.choice("Confidence", ["low", "medium", "high"])),
+            .init(name: "reason", description: "One short clause", schema: SchemaBuilder.string),
+        ]), dependencies: [])
+        let session = LanguageModelSession(model: .default, instructions: """
+        You route requests to an AI coding agent to the cheapest capable tier.
+        local: \(TierGuide.local).
+        cheap: \(TierGuide.cheap).
+        frontier: \(TierGuide.frontier).
+        Prefer the cheaper tier when unsure between two. Ignore the wording's length; judge the work required.
+        """)
+        let prompt = "Recent context: \(req.recent.isEmpty ? "(none)" : req.recent)\n\nRequest: \(req.prompt)"
+        let r = try await session.respond(to: prompt, schema: schema, options: GenerationOptions(maximumResponseTokens: 80))
+        let tierRaw = (try? r.content.value(String.self, forProperty: "tier")) ?? "frontier"
+        let conf = (try? r.content.value(String.self, forProperty: "confidence")) ?? "low"
+        let reason = (try? r.content.value(String.self, forProperty: "reason")) ?? ""
+        var tier = Tier(rawValue: tierRaw) ?? .frontier
+        let confidence: Double = ["low": 0.4, "medium": 0.7, "high": 0.9][conf] ?? 0.4
+        // A small model's low-confidence "local" is the dangerous case; escalate one step.
+        if confidence < 0.5, tier == .local { tier = .cheap }
+        return .init(tier: tier, reason: reason, confidence: confidence, router: "ondevice")
+    }
+}
+
+/// TypeSafe Jev: a decision-only model returning calibrated probabilities (experimental; the
+/// request shape follows TypeSafe's published examples and may need adjusting).
+public struct JevRouter: Router {
+    let key: String
+    public init?() {
+        guard let k = ProcessInfo.processInfo.environment["JEV_API_KEY"] ?? Secrets.keychain(service: "mlex-jev"), !k.isEmpty else { return nil }
+        key = k
+    }
+
+    public func route(_ req: RouteRequest) async throws -> RouteDecision {
+        var r = URLRequest(url: URL(string: "https://api.typesafe.ai/v1/systemone")!)
+        r.httpMethod = "POST"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        let body: [String: Any] = [
+            "state": "Recent context: \(req.recent)\n\nRequest: \(req.prompt)",
+            "questions": ["tier": [
+                "type": "choice",
+                "instructions": "Which tier should handle this request to an AI coding agent? Prefer the cheapest capable tier.",
+                "criteria": ["local": TierGuide.local, "cheap": TierGuide.cheap, "frontier": TierGuide.frontier],
+            ]],
+        ]
+        r.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, resp) = try await URLSession.shared.data(for: r)
+        guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
+            throw MlexError.modelUnavailable("jev HTTP \((resp as? HTTPURLResponse)?.statusCode ?? -1): \(String(decoding: data.prefix(200), as: UTF8.self))")
+        }
+        let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        let answers = (obj["answers"] as? [String: Any]) ?? (obj["results"] as? [String: Any]) ?? obj
+        guard let t = answers["tier"] as? [String: Any], let choice = t["choice"] as? String, let tier = Tier(rawValue: choice) else {
+            throw MlexError.modelUnavailable("jev: unexpected response \(String(decoding: data.prefix(200), as: UTF8.self))")
+        }
+        let probs = t["probabilities"] as? [String: Double] ?? [:]
+        return .init(tier: tier, reason: probs.map { "\($0.key) \(Int($0.value * 100))%" }.sorted().joined(separator: ", "), confidence: probs[choice] ?? 0.5, router: "jev")
+    }
+}
+
+/// Resolves tiers to concrete specs, falling back when a tier's backend is not usable.
+public struct TierResolver: Sendable {
+    public var routes: Settings.Routes
+    public var available: Set<String>
+
+    public init(routes: Settings.Routes, available: Set<String>) { self.routes = routes; self.available = available }
+
+    public func spec(for tier: Tier) -> ModelSpec {
+        let order: [String] = switch tier {
+        case .local: [routes.local, routes.cheap, routes.frontier]
+        case .cheap: [routes.cheap, routes.frontier, routes.local]
+        case .frontier: [routes.frontier, routes.cheap, routes.local]
+        }
+        for s in order {
+            if available.contains(s), let spec = try? ModelSpec(parsing: s) { return spec }
+        }
+        return .system
+    }
+
+    public static func current() async -> TierResolver {
+        let settings = Settings.load()
+        var avail = Set(await Backends.status().filter(\.available).map(\.spec))
+        // Any Claude id is usable when a key exists; Haiku is not listed by status().
+        if avail.contains("claude:sonnet5") { avail.formUnion([settings.routes.cheap, settings.routes.frontier].filter { $0.hasPrefix("claude:") }) }
+        return .init(routes: settings.routes, available: avail)
+    }
+
+    public static func makeRouter() -> any Router {
+        if Settings.load().router == "jev", let j = JevRouter() { return j }
+        return OnDeviceRouter()
+    }
+}

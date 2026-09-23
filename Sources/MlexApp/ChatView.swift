@@ -52,6 +52,7 @@ struct TopBar: View {
             } label: { Pill { Label("Effort \(model.effort.rawValue)", systemImage: "brain") } }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             Menu {
+                Section("Routing") { modelButton(.auto) }
                 Section("Apple") { ForEach(model.specs.filter { $0 == .system || $0 == .pcc }, id: \.self) { modelButton($0) } }
                 Section("Cloud") { ForEach(model.specs.filter { if case .claude = $0 { true } else { false } }, id: \.self) { modelButton($0) } }
                 Section("Local MLX") { ForEach(model.specs.filter { if case .mlx = $0 { true } else { false } }, id: \.self) { modelButton($0) } }
@@ -60,8 +61,8 @@ struct TopBar: View {
             } label: {
                 Pill {
                     HStack(spacing: 5) {
-                        if model.loadingID != nil { ProgressView().controlSize(.mini) } else { Image(systemName: "cpu") }
-                        Text(model.selected.description).lineLimit(1)
+                        if model.loadingID != nil { ProgressView().controlSize(.mini) } else { Image(systemName: model.selected == .auto ? "arrow.triangle.branch" : "cpu") }
+                        Text(model.selected == .auto ? "auto · \(model.current?.effectiveSpec.description ?? "…")" : model.selected.description).lineLimit(1)
                         Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
                     }
                 }

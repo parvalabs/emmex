@@ -7,6 +7,8 @@ public enum ModelSpec: Sendable, Hashable, CustomStringConvertible {
     case pcc
     case claude(String)
     case mlx(String)
+    /// Route every message to a tier (local / cheap / frontier) chosen by the router.
+    case auto
 
     public static let `default`: ModelSpec = .system
 
@@ -14,6 +16,7 @@ public enum ModelSpec: Sendable, Hashable, CustomStringConvertible {
         let parts = s.split(separator: ":", maxSplits: 1).map(String.init)
         switch (parts.first ?? "", parts.count > 1 ? parts[1] : nil) {
         case ("system", nil), ("apple", nil), ("local", nil): self = .system
+        case ("auto", nil): self = .auto
         case ("pcc", nil), ("cloud", nil): self = .pcc
         case ("claude", let m): self = .claude(m ?? "sonnet5")
         case ("mlx", let id?): self = .mlx(id)
@@ -27,6 +30,7 @@ public enum ModelSpec: Sendable, Hashable, CustomStringConvertible {
         case .pcc: "pcc"
         case .claude(let m): "claude:\(m)"
         case .mlx(let id): "mlx:\(id)"
+        case .auto: "auto"
         }
     }
 }
@@ -39,7 +43,7 @@ public enum MlexError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .badModelSpec(let s): "unknown model spec '\(s)' (use system | pcc | claude:<name> | mlx:<hf-id>)"
+        case .badModelSpec(let s): "unknown model spec '\(s)' (use auto | system | pcc | claude:<name> | mlx:<hf-id>)"
         case .modelUnavailable(let why): "model unavailable: \(why)"
         case .missingAPIKey: "no Anthropic API key: set ANTHROPIC_API_KEY or add a Keychain item with service 'mlex-anthropic'"
         case .notInstalled(let id): "MLX model '\(id)' is not installed; run: mlex models pull \(id)"

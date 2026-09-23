@@ -15,7 +15,7 @@ import MlexCore
 }
 
 struct ModelOption: ParsableArguments {
-    @Option(name: [.short, .long], help: "system | pcc | claude:<name> | mlx:<hf-id>")
+    @Option(name: [.short, .long], help: "auto | system | pcc | claude:<name> | mlx:<hf-id>")
     var model: String = "system"
     @Option(name: .long, help: "Reasoning effort: off | low | medium | high (Claude effort, MLX thinking on/off).")
     var effort: String = "off"
@@ -259,6 +259,10 @@ struct Chat: AsyncParsableCommand {
             if line == "/context" {
                 let (used, size) = await agent.contextUsage()
                 print("context: \(used) / \(size) tokens"); continue
+            }
+            if line == "/route" {
+                if let d = agent.lastRoute { print("last route: \(d.tier.rawValue) via \(d.router) (\(Int(d.confidence * 100))%) → \(agent.effectiveSpec) \(d.reason)") } else { print("no routing yet (model must be auto)") }
+                continue
             }
             if line == "/tools" { for t in agent.toolNames { print("  \(t)") }; continue }
             if let expanded = commands.expand(line) {

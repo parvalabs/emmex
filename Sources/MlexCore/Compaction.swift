@@ -21,6 +21,7 @@ public enum Compactor {
         case .pcc: return (try? await PrivateCloudComputeLanguageModel().contextSize) ?? 32_768
         case .claude: return 200_000
         case .mlx(let id): return await ModelStore.shared.contextLength(for: id)
+        case .auto: return SystemLanguageModel.default.contextSize
         }
     }
 

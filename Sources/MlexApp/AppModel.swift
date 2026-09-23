@@ -67,7 +67,7 @@ final class AppModel {
         if ProcessInfo.processInfo.environment["MLEX_DEBUG"] != nil { FileHandle.standardError.write(Data("[mlex] \(msg())\n".utf8)) }
     }
 
-    var specs: [ModelSpec] { backends.filter(\.available).compactMap { try? ModelSpec(parsing: $0.spec) } }
+    var specs: [ModelSpec] { backends.filter(\.available).compactMap { try? ModelSpec(parsing: $0.spec) }.filter { $0 != .auto } }
 
     // MARK: lifecycle
 
