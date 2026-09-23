@@ -6,13 +6,22 @@ import MlexServer
 
 /// The Mac app is a thin native shell: a window hosting the web UI served from localhost by
 /// the same server the `mlex serve` command runs. Native menus map to web actions.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ n: Notification) {
+        if ProcessInfo.processInfo.environment["MLEX_DEBUG"] != nil { FileHandle.standardError.write(Data("[mlex] app launched\n".utf8)) }
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
 @main
 struct MlexApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var host = WebHost()
 
     var body: some Scene {
         WindowGroup("mlex") {
-            WebView(host: host)
+            WebView(url: host.url)
                 .frame(minWidth: 960, minHeight: 620)
                 .ignoresSafeArea()
         }
@@ -77,19 +86,18 @@ final class WebHost {
 }
 
 struct WebView: NSViewRepresentable {
-    let host: WebHost
+    let url: URL?
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-        config.preferences.setValue(true, forKey: "developerExtrasEnabled")   // Inspect Element in the context menu
         let view = WKWebView(frame: .zero, configuration: config)
-        view.setValue(false, forKey: "drawsBackground")
+        view.isInspectable = true                       // Inspect Element / Safari Web Inspector
         view.underPageBackgroundColor = .windowBackgroundColor
         return view
     }
 
     func updateNSView(_ view: WKWebView, context: Context) {
-        if let url = host.url, view.url == nil { view.load(URLRequest(url: url)) }
+        if let url, view.url == nil { view.load(URLRequest(url: url)) }
     }
 
     static func dismantleNSView(_ view: WKWebView, coordinator: ()) {}
