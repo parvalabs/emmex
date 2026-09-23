@@ -1,6 +1,5 @@
 import Foundation
 import FoundationModels
-import HuggingFace
 import MLXFoundationModels
 import MLXHuggingFace
 import MLXLMCommon
@@ -47,18 +46,15 @@ public actor ModelStore {
         return out.sorted { $0.id < $1.id }
     }
 
-    /// Download a repo snapshot from Hugging Face into the store. Safetensors, json, txt, jinja only.
+    /// Download a model repo into the store with byte-level progress (fraction, "x of y MB · file").
     public func pull(_ id: String, progress: @escaping @Sendable (Double, String) -> Void) async throws -> URL {
-        guard let repo = Repo.ID(rawValue: id) else { throw MlexError.badModelSpec("mlx:\(id)") }
+        guard id.split(separator: "/").count == 2 else { throw MlexError.badModelSpec("mlx:\(id)") }
         let dest = directory(for: id)
-        try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
-        let client = HubClient()
-        _ = try await client.downloadSnapshot(
-            of: repo, kind: .model, to: dest, revision: "main",
-            matching: ["*.safetensors", "*.json", "*.txt", "*.jinja", "*.model"],
-            progressHandler: { p in
-                progress(p.fractionCompleted, p.localizedAdditionalDescription ?? "")
-            })
+        try await HFDownloader.download(repo: id, into: dest) { done, total, file in
+            let f = ByteCountFormatter(); f.countStyle = .file
+            progress(total > 0 ? Double(done) / Double(total) : 0,
+                     "\(f.string(fromByteCount: done)) of \(f.string(fromByteCount: total)) · \(file)")
+        }
         return dest
     }
 
