@@ -46,10 +46,15 @@ public final class AgentSession: @unchecked Sendable {
         self.toolNames = tools.map(\.name)
         let base = instructions ?? Self.defaultInstructions
         self.baseInstructions = base
+        let composed = await Self.compose(base, workspace: record.workspaceURL, cwd: record.cwdURL, spec: spec)
+        var transcript: Transcript? = nil
+        if !record.transcript.isEmpty {
+            // A saved transcript carries the instructions it was created with; refresh them so
+            // memory, skills, and context files reflect what exists now.
+            transcript = Self.refreshInstructions(Compactor.sanitized(record.transcript), with: composed)
+        }
         self.session = try await Backends.makeSession(
-            spec, tools: tools,
-            instructions: await Self.compose(base, workspace: record.workspaceURL, cwd: record.cwdURL, spec: spec),
-            transcript: record.transcript.isEmpty ? nil : Compactor.sanitized(record.transcript),
+            spec, tools: tools, instructions: composed, transcript: transcript,
             onWarning: { sink(.warning($0)) })
     }
 
@@ -170,7 +175,11 @@ public final class AgentSession: @unchecked Sendable {
     /// Prepend facts relevant to this prompt (beyond the ones already in the instructions).
     private func withMemory(_ prompt: String) async -> String {
         guard Settings.load().memory else { return prompt }
-        let facts = await MemoryStore.shared.relevant(to: prompt, workspace: record.workspaceURL, limit: 5)
+        let lower = prompt.lowercased()
+        let asksAboutMemory = ["remember", "memory", "memories", "recall", "previous session", "earlier session", "last time"].contains { lower.contains($0) }
+        let facts = asksAboutMemory
+            ? Array(await MemoryStore.shared.facts(workspace: record.workspaceURL).sorted { $0.createdAt > $1.createdAt }.prefix(12))
+            : await MemoryStore.shared.relevant(to: prompt, workspace: record.workspaceURL, limit: 5)
         guard !facts.isEmpty else { return prompt }
         return "Relevant memory:\n" + facts.map { "- \($0.text)" }.joined(separator: "\n") + "\n\n" + prompt
     }
@@ -210,6 +219,14 @@ public final class AgentSession: @unchecked Sendable {
         record.effort = effort
         if autosave { try? save() }
         return last
+    }
+
+    static func refreshInstructions(_ t: Transcript, with text: String) -> Transcript {
+        var entries = Array(t)
+        if let i = entries.firstIndex(where: { if case .instructions = $0 { true } else { false } }), case .instructions(let old) = entries[i] {
+            entries[i] = .instructions(.init(id: old.id, segments: [.text(.init(content: text))], toolDefinitions: old.toolDefinitions))
+        }
+        return Transcript(entries: entries)
     }
 
     /// Base instructions plus skills listing, project context files, and remembered facts.

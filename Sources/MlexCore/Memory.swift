@@ -47,7 +47,11 @@ public actor MemoryStore {
             guard t.count >= 8, t.count <= 300, existing.insert(Self.normalize(t)).inserted else { continue }
             // Near-duplicate by keyword overlap (a restated fact with different wording).
             let kw = Set(Self.keywords(t))
-            if !kw.isEmpty, keywordSets.contains(where: { !$0.isEmpty && Double(kw.intersection($0).count) / Double(kw.union($0).count) >= 0.5 }) { continue }
+            if !kw.isEmpty, keywordSets.contains(where: { other in
+                guard !other.isEmpty else { return false }
+                let inter = kw.intersection(other).count
+                return Double(inter) / Double(kw.union(other).count) >= 0.45 || inter == min(kw.count, other.count)   // overlap, or one subsumes the other
+            }) { continue }
             keywordSets.append(kw)
             facts.append(.init(id: UUID().uuidString.lowercased(), text: t, kind: n.kind, createdAt: Date(), lastUsed: Date(), uses: 0, source: source))
             added += 1
@@ -86,7 +90,7 @@ public actor MemoryStore {
     /// Prompt section for injection.
     public static func promptSection(_ facts: [MemoryFact]) -> String? {
         guard !facts.isEmpty else { return nil }
-        return "Remembered about this project and user (from earlier sessions):\n" + facts.map { "- \($0.text)" }.joined(separator: "\n")
+        return "Memory. These are facts you remembered from earlier sessions with this user and project; treat them as your own memories and, when asked what you remember, list them:\n" + facts.map { "- \($0.text)" }.joined(separator: "\n")
     }
 
     static func normalize(_ s: String) -> String {
@@ -95,7 +99,13 @@ public actor MemoryStore {
 
     static let stop: Set<String> = ["the","a","an","and","or","of","to","in","on","for","is","are","it","this","that","with","as","by","at","be","was","from","we","i","you","my","our","use","using","file","files"]
     static func keywords(_ s: String) -> [String] {
-        normalize(s).split(separator: " ").map(String.init).filter { $0.count > 2 && !stop.contains($0) }
+        normalize(s).split(separator: " ").map(String.init).filter { $0.count > 2 && !stop.contains($0) }.map(stem)
+    }
+    /// Just enough stemming to make "deploys"/"deploy" and "messages"/"message" match.
+    static func stem(_ w: String) -> String {
+        var w = w
+        for suffix in ["ing", "ed", "es", "s"] where w.count > 4 && w.hasSuffix(suffix) { w.removeLast(suffix.count); break }
+        return w
     }
 }
 
