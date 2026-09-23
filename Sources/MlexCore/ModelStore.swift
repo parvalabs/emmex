@@ -84,19 +84,17 @@ public actor ModelStore {
 
     /// A `LanguageModel` for an installed MLX model. Instances are cached; the weights are
     /// loaded lazily by the framework on first use and kept warm by MLXLanguageModel's cache.
-    public func languageModel(for id: String, reasoning: Bool = true) throws -> MLXLanguageModel {
+    /// `.reasoning` is always declared so thinking can be switched per request via `Effort`.
+    public func languageModel(for id: String) throws -> MLXLanguageModel {
         guard isInstalled(id) else { throw MlexError.notInstalled(id) }
-        let key = "\(id)#\(reasoning)"
-        if let m = loaded[key] { return m }
+        if let m = loaded[id] { return m }
         let dir = directory(for: id)
-        var caps: [LanguageModelCapabilities.Capability] = [.guidedGeneration, .toolCalling]
-        if reasoning { caps.append(.reasoning) }
         let model = MLXLanguageModel(
             configuration: ModelConfiguration(directory: dir),
-            capabilities: caps,
+            capabilities: [.guidedGeneration, .toolCalling, .reasoning],
             weightsLocation: { _ in dir },
             load: { _, _ in try await loadModelContainer(from: dir, using: #huggingFaceTokenizerLoader()) })
-        loaded[key] = model
+        loaded[id] = model
         return model
     }
 

@@ -24,6 +24,7 @@ final class AppModel {
 
     // Session
     var selected: ModelSpec = .system
+    var effort: Effort = .default
     var workspace: URL = URL(fileURLWithPath: NSHomeDirectory())
     var timeline: [TimelineItem] = []
     var input: String = ""
@@ -74,6 +75,10 @@ final class AppModel {
     func select(_ spec: ModelSpec) {
         guard spec != selected else { return }
         selected = spec
+        rebuildKeepingTranscript()
+    }
+
+    private func rebuildKeepingTranscript() {
         let transcript = agent?.transcript
         agent = nil
         Task { await makeAgent(transcript: transcript) }
@@ -104,7 +109,7 @@ final class AppModel {
         Task {
             if agent == nil { await makeAgent(transcript: nil) }
             guard let agent else { busy = false; return }
-            do { try await agent.run(prompt) }
+            do { try await agent.run(prompt, effort: effort) }
             catch { timeline.append(.init(kind: .error, text: "\(error)")) }
             busy = false
         }

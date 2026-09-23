@@ -30,9 +30,9 @@ public final class AgentSession: @unchecked Sendable {
 
     /// Run one user turn, streaming text deltas and tool events to the sink. Returns the final text.
     @discardableResult
-    public func run(_ prompt: String) async throws -> String {
+    public func run(_ prompt: String, effort: Effort = .default) async throws -> String {
         var last = ""
-        let stream = session.streamResponse(to: prompt)
+        let stream = session.streamResponse(to: prompt, contextOptions: effort.contextOptions(for: spec))
         var usage: LanguageModelSession.Usage? = nil
         for try await snapshot in stream {
             let full = snapshot.content

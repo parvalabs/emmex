@@ -119,6 +119,11 @@ struct ChatView: View {
         .navigationTitle(model.selected.description)
         .navigationSubtitle(model.workspace.path)
         .toolbar {
+            Picker("Effort", selection: $model.effort) {
+                ForEach(Effort.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+            }
+            .pickerStyle(.menu).controlSize(.small)
+            .help("Reasoning effort per message: Claude effort level, thinking on/off for MLX models")
             if let u = model.lastUsage {
                 Text("in \(u.input.totalTokenCount) · cached \(u.input.cachedTokenCount) · out \(u.output.totalTokenCount)")
                     .font(.caption).foregroundStyle(.secondary)

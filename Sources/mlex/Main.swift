@@ -17,6 +17,12 @@ import MlexCore
 struct ModelOption: ParsableArguments {
     @Option(name: [.short, .long], help: "system | pcc | claude:<name> | mlx:<hf-id>")
     var model: String = "system"
+    @Option(name: .long, help: "Reasoning effort: off | low | medium | high (Claude effort, MLX thinking on/off).")
+    var effort: String = "off"
+    func effortLevel() throws -> Effort {
+        guard let e = Effort(rawValue: effort) else { throw ValidationError("effort must be one of off, low, medium, high") }
+        return e
+    }
     func spec() throws -> ModelSpec { try ModelSpec(parsing: model) }
 }
 
@@ -71,7 +77,7 @@ struct Run: AsyncParsableCommand {
 
     func run() async throws {
         let agent = try await AgentSession(spec: try model.spec(), cwd: cwd ?? FileManager.default.currentDirectoryPath, sink: Printer.print)
-        try await agent.run(prompt.joined(separator: " "))
+        try await agent.run(prompt.joined(separator: " "), effort: try model.effortLevel())
         print()
     }
 }
@@ -87,16 +93,22 @@ struct Chat: AsyncParsableCommand {
         let dir = cwd ?? FileManager.default.currentDirectoryPath
         let transcript = try resume.map { try AgentSession.loadTranscript(from: URL(fileURLWithPath: $0)) }
         let agent = try await AgentSession(spec: spec, cwd: dir, transcript: transcript, sink: Printer.print)
-        print("mlex · \(spec) · \(dir)")
+        var effort = try model.effortLevel()
+        print("mlex · \(spec) · \(dir) · effort \(effort.rawValue) (/effort <level> to change)")
         while true {
             FileHandle.standardOutput.write(Data("\n> ".utf8))
             guard let line = readLine(), !line.isEmpty, line != "/quit", line != "/exit" else { break }
+            if line.hasPrefix("/effort") {
+                let v = line.dropFirst(7).trimmingCharacters(in: .whitespaces)
+                if let e = Effort(rawValue: v) { effort = e; print("effort: \(e.rawValue)") } else { print("effort: off | low | medium | high") }
+                continue
+            }
             if line.hasPrefix("/save") {
                 let path = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
                 let url = URL(fileURLWithPath: path.isEmpty ? "mlex-session.json" : path)
                 try agent.save(to: url); print("saved \(url.path)"); continue
             }
-            do { try await agent.run(line); print() }
+            do { try await agent.run(line, effort: effort); print() }
             catch { print("\nerror: \(error)") }
         }
     }

@@ -29,6 +29,11 @@ swift build -c release
 ```
 
 Model specs: `system`, `pcc`, `claude:<sonnet5|opus5_5|opus4_8|id>`, `mlx:<org/name>`.
+
+Reasoning effort is per message and off by default: `--effort off|low|medium|high` on `run` and
+`chat` (or `/effort <level>` inside chat), and a picker in the app toolbar. On Claude it sets the
+effort level; on MLX models such as Qwen3 it switches thinking on or off, which on a base M4 is
+the difference between about 12 s and 50 s for a one-line answer.
 MLX weights live in `~/.cache/mlex/models/<org>/<name>`. Set `MLEX_USAGE=1` to print token usage.
 
 ## App
