@@ -9,9 +9,8 @@ rm -rf "$APP"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp ".build/$CONF/MlexApp" "$APP/Contents/MacOS/Mlex"
 # SwiftPM resource bundles go in Contents/Resources, where Bundle.main.resourceURL points.
 for b in .build/$CONF/*.bundle; do [ -e "$b" ] && cp -R "$b" "$APP/Contents/Resources/"; done
-# mlx looks for a colocated mlx.metallib next to the binary first; give it one.
-ML=.build/$CONF/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib
-[ -e "$ML" ] && cp "$ML" "$APP/Contents/MacOS/mlx.metallib"
+# mlx finds default.metallib through the SwiftPM bundle in Resources. Do not put a loose
+# metallib in Contents/MacOS: codesign treats it as unsigned nested code and refuses.
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
