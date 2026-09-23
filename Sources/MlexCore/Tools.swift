@@ -51,7 +51,7 @@ public struct BashTool: Tool {
 
 public struct ReadFileTool: Tool {
     public let name = "read_file"
-    public let description = "Read a text file. Path is relative to the working directory."
+    public let description = "Read a text file. Path is relative to the working directory, or absolute."
     let ctx: ToolContext
     public init(_ ctx: ToolContext) { self.ctx = ctx }
     public var parameters: GenerationSchema {
@@ -60,7 +60,7 @@ public struct ReadFileTool: Tool {
     public func call(arguments: GeneratedContent) async throws -> String {
         let path = try arguments.value(String.self, forProperty: "path")
         ctx.report(.toolCall(name: name, arguments: path))
-        let url = URL(fileURLWithPath: ctx.cwd).appendingPathComponent(path)
+        let url = path.hasPrefix("/") ? URL(fileURLWithPath: path) : URL(fileURLWithPath: ctx.cwd).appendingPathComponent(path)
         let result: String
         do { result = ctx.clip(try String(contentsOf: url, encoding: .utf8)) }
         catch { result = "error: \(error.localizedDescription)" }

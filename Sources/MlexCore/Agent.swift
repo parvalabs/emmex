@@ -42,9 +42,10 @@ public final class AgentSession: @unchecked Sendable {
         var tools = Tools.standard(ctx)
         if let mcp { tools += await mcp.tools(ctx: ctx) }
         self.toolNames = tools.map(\.name)
+        let base = instructions ?? Self.defaultInstructions
         self.session = try await Backends.makeSession(
             spec, tools: tools,
-            instructions: instructions ?? Self.defaultInstructions,
+            instructions: Self.compose(base, workspace: record.workspaceURL, cwd: record.cwdURL, spec: spec),
             transcript: record.transcript.isEmpty ? nil : record.transcript,
             onWarning: { sink(.warning($0)) })
     }
@@ -96,6 +97,18 @@ public final class AgentSession: @unchecked Sendable {
         record.effort = effort
         if autosave { try? save() }
         return last
+    }
+
+    /// Base instructions plus skills listing and project context files. Apple's on-device
+    /// model has a small window, so those extras are trimmed harder for it.
+    static func compose(_ base: String, workspace: URL, cwd: URL, spec: ModelSpec) -> String {
+        let small = spec == .system
+        var parts = [base, "Working directory: \(cwd.path)"]
+        if let skills = Skills.promptSection(Skills.discover(workspace: workspace), limit: small ? 8 : 30) { parts.append(skills) }
+        if let ctx = ContextFiles.load(workspace: workspace, cwd: cwd) {
+            parts.append(small ? String(ctx.prefix(1500)) : ctx)
+        }
+        return parts.joined(separator: "\n\n")
     }
 
     static func title(from prompt: String) -> String {

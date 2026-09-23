@@ -198,10 +198,18 @@ struct Chat: AsyncParsableCommand {
             agent = try await AgentSession(spec: try model.spec(), workspace: ws, cwd: cwd, worktree: worktree, mcp: mcp, sink: Printer.print)
         }
         let spec = agent.spec, dir = agent.cwd
-        print("mlex · \(spec) · \(dir) · effort \(effort.rawValue) · session \(agent.record.id.prefix(8))")
+        let commands = Commands(workspace: ws)
+        print("mlex · \(spec) · \(dir) · effort \(effort.rawValue) · session \(agent.record.id.prefix(8)) · \(commands.skills.count) skills · \(commands.templates.count) templates · \(agent.toolNames.count) tools")
         while true {
             FileHandle.standardOutput.write(Data("\n> ".utf8))
             guard let line = readLine(), !line.isEmpty, line != "/quit", line != "/exit" else { break }
+            if line == "/skills" { for k in commands.skills { print("  /skill:\(k.name)  \(k.description.prefix(90))") }; continue }
+            if line == "/prompts" { for t in commands.templates { print("  /\(t.name) \(t.argumentHint ?? "")  \(t.description.prefix(90))") }; continue }
+            if line == "/tools" { for t in agent.toolNames { print("  \(t)") }; continue }
+            if let expanded = commands.expand(line) {
+                do { try await agent.run(expanded, effort: effort); print() } catch { print("\nerror: \(error)") }
+                continue
+            }
             if line.hasPrefix("/model") {
                 let v = line.dropFirst(6).trimmingCharacters(in: .whitespaces)
                 do {
