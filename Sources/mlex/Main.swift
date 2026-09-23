@@ -71,7 +71,32 @@ struct Models: AsyncParsableCommand {
 
 struct Sessions: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "sessions", abstract: "List or delete saved sessions.",
-                                                    subcommands: [List.self, Delete.self], defaultSubcommand: List.self)
+                                                    subcommands: [List.self, Delete.self, Inspect.self], defaultSubcommand: List.self)
+    struct Inspect: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Print a session's transcript entries and probe which prefix the on-device tokenizer rejects.")
+        @Argument var id: String
+        func run() async throws {
+            guard let r = try SessionStore.find(id) else { throw ValidationError("no session matching \(id)") }
+            let entries = Array(r.transcript)
+            func text(_ segs: [Transcript.Segment]) -> String { segs.compactMap { if case .text(let t) = $0 { t.content } else if case .structure(let st) = $0 { st.content.jsonString } else { "[attachment]" } }.joined() }
+            for (i, e) in entries.enumerated() {
+                switch e {
+                case .instructions(let x): print("\(i) instructions tools=\(x.toolDefinitions.count) \(text(x.segments).prefix(70).replacingOccurrences(of: "\n", with: " "))")
+                case .prompt(let x): print("\(i) prompt \(text(x.segments).prefix(90).replacingOccurrences(of: "\n", with: " "))")
+                case .response(let x): print("\(i) response \(text(x.segments).prefix(90).replacingOccurrences(of: "\n", with: " "))")
+                case .toolCalls(let x): print("\(i) toolCalls \(x.map { "\($0.toolName) \($0.arguments.jsonString.prefix(50))" })")
+                case .toolOutput(let x): print("\(i) toolOutput \(x.toolName) \(text(x.segments).prefix(70).replacingOccurrences(of: "\n", with: " "))")
+                case .reasoning: print("\(i) reasoning")
+                @unknown default: print("\(i) other")
+                }
+            }
+            print("--- tokenizer probe:")
+            for n in 1...entries.count {
+                do { let c = try await SystemLanguageModel.default.tokenCount(for: entries.prefix(n)); print("  prefix \(n): \(c) tokens") }
+                catch { print("  prefix \(n): FAILS (\(error))"); break }
+            }
+        }
+    }
     struct List: AsyncParsableCommand {
         @Option(name: .long, help: "Workspace folder (default: current).") var workspace: String?
         func run() async throws {

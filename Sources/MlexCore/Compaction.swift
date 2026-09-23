@@ -49,8 +49,13 @@ public enum Compactor {
         for e in transcript {
             if case .instructions = e, instructions == nil { instructions = e } else { rest.append(e) }
         }
-        let keep = keepRecent < rest.count ? Array(rest.suffix(keepRecent)) : rest
-        let old = rest.dropLast(keep.count)
+        // Keep the last `keepRecent` entries, extended backwards to the start of a user turn so
+        // the kept tail never begins mid-turn (a transcript starting with a tool output cannot
+        // be tokenized by the on-device model).
+        var cut = max(0, rest.count - keepRecent)
+        while cut > 0, !Self.isPrompt(rest[cut]) { cut -= 1 }
+        let keep = Array(rest[cut...])
+        let old = Array(rest[..<cut])
         guard !old.isEmpty else { return (transcript, "", 0) }
         let summary = try await summarize(Array(old))
         var entries: [Transcript.Entry] = []
@@ -71,6 +76,29 @@ public enum Compactor {
             summary = try await session.respond(to: prompt, options: GenerationOptions(maximumResponseTokens: 600)).content
         }
         return summary
+    }
+
+    static func isPrompt(_ e: Transcript.Entry) -> Bool { if case .prompt = e { true } else { false } }
+
+    /// Repair a saved transcript so the model can tokenize it: nothing between the instructions
+    /// and the first user prompt, and no tool output without a preceding tool call (an older
+    /// compaction or a crash mid-turn can leave either).
+    public static func sanitized(_ t: Transcript) -> Transcript {
+        var out: [Transcript.Entry] = []
+        var seenPrompt = false
+        var openCalls = 0
+        for e in t {
+            if case .instructions = e, out.isEmpty { out.append(e); continue }
+            if !seenPrompt { if isPrompt(e) { seenPrompt = true } else { continue } }
+            switch e {
+            case .toolCalls(let c): openCalls = c.count; out.append(e)
+            case .toolOutput:
+                guard openCalls > 0 else { continue }   // orphan output: drop
+                openCalls -= 1; out.append(e)
+            default: openCalls = 0; out.append(e)
+            }
+        }
+        return out.count == t.count ? t : Transcript(entries: out)
     }
 
     static func render(_ e: Transcript.Entry) -> String {

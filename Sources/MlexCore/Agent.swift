@@ -48,7 +48,7 @@ public final class AgentSession: @unchecked Sendable {
         self.session = try await Backends.makeSession(
             spec, tools: tools,
             instructions: Self.compose(base, workspace: record.workspaceURL, cwd: record.cwdURL, spec: spec),
-            transcript: record.transcript.isEmpty ? nil : record.transcript,
+            transcript: record.transcript.isEmpty ? nil : Compactor.sanitized(record.transcript),
             onWarning: { sink(.warning($0)) })
     }
 
