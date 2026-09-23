@@ -46,13 +46,32 @@ public actor MemoryStore {
     public static let shared = MemoryStore()
     static let maxFacts = 400
     static let duplicateCosine: Float = 0.90
-    static let supersedeCosine: Float = 0.78     // same subject, different content: newer replaces older
+    static let supersedeCosine: Float = 0.55     // candidates for the relation classifier (changed values score ~0.7)
     static let clusterCosine: Float = 0.55       // consolidation groups (0.40 if a keyword is shared)
     static let relevantCosine: Float = 0.25
     static let expireUnusedDays = 30.0            // never used since creation
     static let expireIdleDays = 90.0              // not used for this long
+    static let autoConsolidateAdds = 8            // new facts since the last run…
+    static let autoConsolidateDays = 1.0          // …or this long since it, with at least 10 facts
 
     public func url(for workspace: URL) -> URL { Paths.appSupport.appending(path: "memory").appending(path: "\(Paths.key(for: workspace)).json") }
+    func metaURL(for workspace: URL) -> URL { Paths.appSupport.appending(path: "memory").appending(path: "\(Paths.key(for: workspace)).meta.json") }
+
+    struct Meta: Codable { var lastConsolidated: Date?; var addsSince: Int = 0 }
+    func meta(for workspace: URL) -> Meta {
+        (try? Data(contentsOf: metaURL(for: workspace))).flatMap { try? SessionStore.decoder.decode(Meta.self, from: $0) } ?? Meta()
+    }
+    func saveMeta(_ m: Meta, for workspace: URL) { try? SessionStore.encoder.encode(m).write(to: metaURL(for: workspace), options: .atomic) }
+
+    /// Whether enough has changed to consolidate automatically.
+    public func shouldAutoConsolidate(workspace: URL) async -> Bool {
+        let m = meta(for: workspace)
+        if m.addsSince >= Self.autoConsolidateAdds { return true }
+        let active = (await facts(workspace: workspace)).count
+        guard active >= 10 else { return false }
+        guard let last = m.lastConsolidated else { return true }
+        return Date().timeIntervalSince(last) > Self.autoConsolidateDays * 86_400
+    }
     public var globalURL: URL { Paths.appSupport.appending(path: "memory/global.json") }
 
     func read(_ u: URL) -> [MemoryFact] {
@@ -111,20 +130,26 @@ public actor MemoryStore {
             if active.contains(where: { Self.normalize($0.text) == Self.normalize(t) }) { continue }
             let kw = Set(Self.keywords(t))
             let vec = await Embedder.shared.vector(for: t)
-            // Relationship to each active fact: same subject and same content is a duplicate;
-            // same subject with different content (a changed command, a revised decision) means
-            // the new fact supersedes the old one.
+            // Relationship to each active fact. Cheap checks first: identical keywords are a
+            // duplicate. For anything else on a similar subject, the on-device model decides
+            // whether the new fact duplicates, conflicts with (supersedes), or complements it.
+            // Facts extracted in this same turn are siblings and never compared.
             var isDuplicate = false
             var supersedes: [String] = []
-            for f in active {
+            let batchIDs = Set(added.map(\.id))
+            for f in active where !batchIDs.contains(f.id) {
                 let other = Set(Self.keywords(f.text))
                 let inter = kw.intersection(other).count
                 let overlap = kw.isEmpty || other.isEmpty ? 0 : Double(inter) / Double(kw.union(other).count)
                 let sim: Float = (vec != nil && f.embedding != nil) ? Embedder.cosine(vec!, f.embedding!) : 0
-                let sameSubject = sim >= Self.supersedeCosine || overlap >= 0.45 || (inter > 0 && inter == min(kw.count, other.count))
-                guard sameSubject else { continue }
-                let sameContent = kw == other || kw.isSubset(of: other) || sim >= Self.duplicateCosine && overlap >= 0.6
-                if sameContent { isDuplicate = true; break } else { supersedes.append(f.id) }
+                if kw == other || (kw.isSubset(of: other) && !kw.isEmpty) { isDuplicate = true; break }
+                guard sim >= Self.supersedeCosine || (sim >= 0.40 && inter > 0) || overlap >= 0.6 else { continue }
+                switch (try? await MemoryConsolidator.relation([t, f.text])) ?? "complementary" {
+                case "duplicate": isDuplicate = true
+                case "conflict": supersedes.append(f.id)
+                default: break
+                }
+                if isDuplicate { break }
             }
             if isDuplicate { continue }
             let fact = MemoryFact(id: UUID().uuidString.lowercased(), text: t, kind: n.kind, scope: n.scope == "user" ? "user" : "project",
@@ -137,6 +162,7 @@ public actor MemoryStore {
         }
         project = Self.prune(project); global = Self.prune(global)
         try write(project, to: url(for: workspace)); try write(global, to: globalURL)
+        if !added.isEmpty { var m = meta(for: workspace); m.addsSince += added.count; saveMeta(m, for: workspace) }
         return added
     }
 
@@ -177,6 +203,7 @@ public actor MemoryStore {
                 // The model only classifies the cluster; on duplicate or conflict the newest fact is
                 // kept verbatim, so "newest wins" is guaranteed rather than hoped for.
                 let relation = (try? await MemoryConsolidator.relation(members.map(\.text))) ?? "complementary"
+                if relation == "different" { continue }
                 let text: String
                 if relation == "complementary" {
                     guard let merged = try await MemoryConsolidator.merge(members.map(\.text)) else { continue }
@@ -192,6 +219,7 @@ public actor MemoryStore {
             }
             if !result.isEmpty { try write(Self.prune(facts), to: u) }
         }
+        saveMeta(Meta(lastConsolidated: Date(), addsSince: 0), for: workspace)
         return result
     }
 
@@ -290,16 +318,22 @@ public enum MemoryExtractor {
 /// Merges a cluster of overlapping facts into one sentence with the on-device model.
 public enum MemoryConsolidator {
     /// duplicate: same information; conflict: different values for the same thing; complementary:
-    /// different details about the same subject that can be combined.
+    /// different details about the same subject; different: about different things entirely.
     public static func relation(_ texts: [String]) async throws -> String {
         let schema = try GenerationSchema(root: DynamicGenerationSchema(name: "Relation", properties: [
-            .init(name: "relation", description: "How the facts relate", schema: SchemaBuilder.choice("Rel", ["duplicate", "conflict", "complementary"])),
+            .init(name: "relation", description: "How the facts relate", schema: SchemaBuilder.choice("Rel", ["duplicate", "conflict", "complementary", "different"])),
         ]), dependencies: [])
         let session = LanguageModelSession(model: .default, instructions: """
-        You compare remembered facts about the same subject. Answer duplicate if they say the same \
-        thing in different words; conflict if they give different values for the same thing (a \
-        different command, name, path, number, or setting); complementary if they add different \
-        details that do not contradict each other.
+        You compare two remembered facts. First decide whether they are about the SAME thing (the \
+        same command, setting, name, file, or rule). If they are about different things, answer \
+        different. If about the same thing: duplicate when they state the same value in other \
+        words; conflict when they state different values; complementary when they add details \
+        that do not contradict.
+        Examples:
+        "The test command is make test." / "The lint command is make lint." → different (test vs lint are different commands)
+        "The test command is make test." / "The test command is now swift test." → conflict (same command, different value)
+        "The lint command is make lint." / "Code validation runs with make lint." → duplicate
+        "The main branch is trunk." / "Releases are tagged from trunk." → complementary
         """)
         let input = texts.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
         let r = try await session.respond(to: input, schema: schema, options: GenerationOptions(maximumResponseTokens: 20))

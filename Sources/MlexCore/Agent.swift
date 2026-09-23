@@ -187,7 +187,7 @@ public final class AgentSession: @unchecked Sendable {
 
     /// Extract durable facts from the turn with the on-device model and store them.
     private func remember(prompt: String, response: String) async {
-        guard Settings.load().memory, response.count > 20, !prompt.hasPrefix("Summary of the conversation") else { return }
+        guard Settings.load().memory, prompt.count + response.count > 40, !prompt.hasPrefix("Summary of the conversation") else { return }
         let tools = session.transcript.suffix(8).compactMap { e -> String? in
             if case .toolCalls(let c) = e { return c.map(\.toolName).joined(separator: ",") } else { return nil }
         }.joined(separator: " ")
@@ -196,6 +196,10 @@ public final class AgentSession: @unchecked Sendable {
             if ProcessInfo.processInfo.environment["MLEX_DEBUG"] != nil { FileHandle.standardError.write(Data("[mlex] extracted: \(facts)\n".utf8)) }
             let added = try await MemoryStore.shared.add(facts, workspace: record.workspaceURL, source: record.id)
             if !added.isEmpty { sink(.info("remembered: " + added.map { ($0.scope == "user" ? "[you] " : "") + $0.text }.joined(separator: " · "))) }
+            if await MemoryStore.shared.shouldAutoConsolidate(workspace: record.workspaceURL) {
+                let merges = try await MemoryStore.shared.consolidate(workspace: record.workspaceURL)
+                if !merges.isEmpty { sink(.info("memory: merged \(merges.reduce(0) { $0 + $1.from.count }) facts into \(merges.count)")) }
+            }
         } catch {
             // Memory is best effort; never fail the turn over it.
         }

@@ -206,7 +206,18 @@ struct Serve: AsyncParsableCommand {
 
 struct MemoryCmd: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "memory", abstract: "Facts remembered for a workspace.",
-                                                    subcommands: [List.self, Search.self, Forget.self, Restore.self, Consolidate.self, Clear.self], defaultSubcommand: List.self)
+                                                    subcommands: [List.self, Search.self, Forget.self, Restore.self, Consolidate.self, Clear.self, Relate.self], defaultSubcommand: List.self)
+    struct Relate: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Debug: similarity and the on-device relation verdict for two facts.")
+        @Argument var a: String
+        @Argument var b: String
+        func run() async throws {
+            let va = await Embedder.shared.vector(for: a), vb = await Embedder.shared.vector(for: b)
+            let sim = (va != nil && vb != nil) ? Embedder.cosine(va!, vb!) : 0
+            let rel = try await MemoryConsolidator.relation([a, b])
+            print(String(format: "cosine %.2f  relation %@", sim, rel))
+        }
+    }
     struct Restore: AsyncParsableCommand {
         @Argument var id: String
         @Option(name: .long) var workspace: String?
