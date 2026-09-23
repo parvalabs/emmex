@@ -1,11 +1,14 @@
 import Foundation
 import FoundationModels
 
-/// One agent conversation on one model, with tools, streaming events, and a persistable transcript.
+/// One agent conversation on one model, with tools, streaming events, and a persisted record.
 public final class AgentSession: @unchecked Sendable {
     public let spec: ModelSpec
     public let cwd: String
     public private(set) var session: LanguageModelSession
+    public private(set) var record: SessionRecord
+    /// Whether turns are saved to the session store after each response.
+    public var autosave = true
     private let sink: EventSink
 
     public static let defaultInstructions = """
@@ -17,17 +20,50 @@ public final class AgentSession: @unchecked Sendable {
     terse and concrete.
     """
 
-    public init(spec: ModelSpec, cwd: String, instructions: String? = nil,
-                transcript: Transcript? = nil, sink: @escaping EventSink) async throws {
-        self.spec = spec; self.cwd = cwd; self.sink = sink
-        let ctx = ToolContext(cwd: cwd, report: sink)
+    /// Start a new session in `workspace` (tools run in `cwd`, which defaults to the workspace).
+    public convenience init(spec: ModelSpec, workspace: URL, cwd: URL? = nil, worktree: String? = nil,
+                            instructions: String? = nil, sink: @escaping EventSink) async throws {
+        let record = SessionRecord(workspace: workspace, cwd: cwd ?? workspace, worktree: worktree, model: spec)
+        try await self.init(record: record, spec: spec, instructions: instructions, sink: sink)
+    }
+
+    /// Resume a saved session, optionally on a different model (the transcript carries over).
+    public init(record: SessionRecord, spec: ModelSpec? = nil, instructions: String? = nil,
+                sink: @escaping EventSink) async throws {
+        var record = record
+        let spec = spec ?? record.spec
+        record.model = spec.description
+        self.spec = spec; self.cwd = record.cwd; self.sink = sink; self.record = record
+        let ctx = ToolContext(cwd: record.cwd, report: sink)
         self.session = try await Backends.makeSession(
             spec, tools: Tools.standard(ctx),
-            instructions: instructions ?? Self.defaultInstructions, transcript: transcript,
+            instructions: instructions ?? Self.defaultInstructions,
+            transcript: record.transcript.isEmpty ? nil : record.transcript,
             onWarning: { sink(.warning($0)) })
     }
 
+    /// Legacy initializer used by the spikes: a throwaway session that is not saved.
+    public convenience init(spec: ModelSpec, cwd: String, instructions: String? = nil,
+                            transcript: Transcript? = nil, sink: @escaping EventSink) async throws {
+        var record = SessionRecord(workspace: URL(fileURLWithPath: cwd), cwd: URL(fileURLWithPath: cwd), model: spec)
+        if let t = transcript { record.transcript = t }
+        try await self.init(record: record, spec: spec, instructions: instructions, sink: sink)
+        autosave = false
+    }
+
     public var transcript: Transcript { session.transcript }
+
+    /// Persist the current transcript and metadata.
+    public func save() throws {
+        record.transcript = session.transcript
+        record.updatedAt = Date()
+        try SessionStore.save(record)
+    }
+
+    public func rename(_ title: String) {
+        record.title = title
+        if autosave { try? save() }
+    }
 
     /// Run one user turn, streaming text deltas and tool events to the sink. Returns the final text.
     @discardableResult
@@ -46,10 +82,21 @@ public final class AgentSession: @unchecked Sendable {
             usage = snapshot.usage
         }
         sink(.finished(usage: usage, text: last))
+        record.turns += 1
+        if record.turns == 1, record.title == "New session" {
+            record.title = Self.title(from: prompt)
+        }
+        record.effort = effort
+        if autosave { try? save() }
         return last
     }
 
-    // MARK: persistence
+    static func title(from prompt: String) -> String {
+        let one = prompt.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
+        return one.count > 60 ? String(one.prefix(57)) + "…" : one
+    }
+
+    // MARK: file export (transcript only)
 
     public func save(to url: URL) throws {
         let data = try JSONEncoder().encode(session.transcript)

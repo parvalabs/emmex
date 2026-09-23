@@ -10,7 +10,7 @@ import MlexCore
     }
     static let configuration = CommandConfiguration(
         abstract: "mlex: local-first agent on Apple Foundation Models, MLX models, and Claude.",
-        subcommands: [Models.self, Run.self, Chat.self],
+        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self],
         defaultSubcommand: Chat.self)
 }
 
@@ -67,6 +67,69 @@ struct Models: AsyncParsableCommand {
     }
 }
 
+// MARK: sessions / worktrees
+
+struct Sessions: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "sessions", abstract: "List or delete saved sessions.",
+                                                    subcommands: [List.self, Delete.self], defaultSubcommand: List.self)
+    struct List: AsyncParsableCommand {
+        @Option(name: .long, help: "Workspace folder (default: current).") var workspace: String?
+        func run() async throws {
+            let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+            let list = SessionStore.list(workspace: ws)
+            if list.isEmpty { print("no sessions for \(ws.path)"); return }
+            let df = DateFormatter(); df.dateStyle = .short; df.timeStyle = .short
+            for s in list {
+                let wt = s.worktree.map { " [\($0)]" } ?? ""
+                print("\(s.id.prefix(8))  \(df.string(from: s.updatedAt))  \(s.model.padding(toLength: 22, withPad: " ", startingAt: 0))  \(s.turns) turns  \(s.title)\(wt)")
+            }
+        }
+    }
+    struct Delete: AsyncParsableCommand {
+        @Argument(help: "Session id or unique prefix.") var id: String
+        func run() async throws {
+            guard let r = try SessionStore.find(id) else { throw ValidationError("no session matching \(id)") }
+            try SessionStore.delete(r.id, workspace: r.workspaceURL)
+            print("deleted \(r.id.prefix(8)) \(r.title)")
+        }
+    }
+}
+
+struct WorktreesCmd: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "worktrees", abstract: "List, add, or remove git worktrees for isolated sessions.",
+                                                    subcommands: [List.self, Add.self, Remove.self], defaultSubcommand: List.self)
+    struct List: AsyncParsableCommand {
+        @Option(name: .long) var workspace: String?
+        func run() async throws {
+            let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+            for w in try Worktrees.list(repo: ws) {
+                print("\(w.isMain ? "main" : "    ")  \((w.branch ?? "(detached)").padding(toLength: 28, withPad: " ", startingAt: 0))  \(w.head)  \(w.path)")
+            }
+        }
+    }
+    struct Add: AsyncParsableCommand {
+        @Argument(help: "Branch name for the worktree (created if missing).") var branch: String
+        @Option(name: .long, help: "Base ref for a new branch (default: HEAD).") var base: String?
+        @Option(name: .long) var workspace: String?
+        func run() async throws {
+            let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+            let w = try Worktrees.add(repo: ws, branch: branch, base: base)
+            print("worktree \(branch) at \(w.path)")
+        }
+    }
+    struct Remove: AsyncParsableCommand {
+        @Argument var branch: String
+        @Flag(name: .long) var force = false
+        @Option(name: .long) var workspace: String?
+        func run() async throws {
+            let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+            guard let w = try Worktrees.list(repo: ws).first(where: { $0.branch == branch }) else { throw ValidationError("no worktree for branch \(branch)") }
+            try Worktrees.remove(repo: ws, path: w.path, force: force)
+            print("removed \(w.path)")
+        }
+    }
+}
+
 // MARK: run / chat
 
 struct Run: AsyncParsableCommand {
@@ -83,18 +146,34 @@ struct Run: AsyncParsableCommand {
 }
 
 struct Chat: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(abstract: "Interactive session. Empty line or /quit exits. /model <spec> switches model (transcript kept), /effort <level>, /save <file>.")
+    static let configuration = CommandConfiguration(abstract: "Interactive session, saved automatically. Empty line or /quit exits. /model <spec>, /effort <level>, /title <text>, /sessions.")
     @OptionGroup var model: ModelOption
-    @Option(name: .long, help: "Working directory for tools (default: current).") var cwd: String?
-    @Option(name: .long, help: "Resume from a saved transcript JSON.") var resume: String?
+    @Option(name: .long, help: "Workspace folder (default: current).") var workspace: String?
+    @Option(name: .long, help: "Resume a saved session by id or prefix (model flag overrides its model).") var resume: String?
+    @Option(name: .long, help: "Run in a git worktree on this branch (created if missing).") var worktree: String?
 
     func run() async throws {
-        let spec = try model.spec()
-        let dir = cwd ?? FileManager.default.currentDirectoryPath
-        let transcript = try resume.map { try AgentSession.loadTranscript(from: URL(fileURLWithPath: $0)) }
-        var agent = try await AgentSession(spec: spec, cwd: dir, transcript: transcript, sink: Printer.print)
+        let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+        WorkspaceStore.touch(ws)
         var effort = try model.effortLevel()
-        print("mlex · \(spec) · \(dir) · effort \(effort.rawValue) (/effort <level> to change)")
+        var agent: AgentSession
+        if let resume {
+            guard let record = try SessionStore.find(resume) else { throw ValidationError("no session matching \(resume)") }
+            let override = model.model == "system" ? nil : try model.spec()   // only override when --model was given explicitly
+            agent = try await AgentSession(record: record, spec: override, sink: Printer.print)
+            effort = record.effort
+            print("resumed \(record.id.prefix(8)) “\(record.title)” (\(record.turns) turns)")
+        } else {
+            var cwd = ws
+            if let worktree {
+                let w = try Worktrees.add(repo: ws, branch: worktree)
+                cwd = URL(fileURLWithPath: w.path)
+                print("worktree \(worktree) at \(w.path)")
+            }
+            agent = try await AgentSession(spec: try model.spec(), workspace: ws, cwd: cwd, worktree: worktree, sink: Printer.print)
+        }
+        let spec = agent.spec, dir = agent.cwd
+        print("mlex · \(spec) · \(dir) · effort \(effort.rawValue) · session \(agent.record.id.prefix(8))")
         while true {
             FileHandle.standardOutput.write(Data("\n> ".utf8))
             guard let line = readLine(), !line.isEmpty, line != "/quit", line != "/exit" else { break }
@@ -102,9 +181,17 @@ struct Chat: AsyncParsableCommand {
                 let v = line.dropFirst(6).trimmingCharacters(in: .whitespaces)
                 do {
                     let newSpec = try ModelSpec(parsing: v)
-                    agent = try await AgentSession(spec: newSpec, cwd: dir, transcript: agent.transcript, sink: Printer.print)
+                    try agent.save()
+                    agent = try await AgentSession(record: agent.record, spec: newSpec, sink: Printer.print)
                     print("model: \(newSpec) · footprint \(SystemMemory.format(SystemMemory.footprint()))")
                 } catch { print("error: \(error)") }
+                continue
+            }
+            if line.hasPrefix("/title") {
+                agent.rename(line.dropFirst(6).trimmingCharacters(in: .whitespaces)); print("title: \(agent.record.title)"); continue
+            }
+            if line == "/sessions" {
+                for s in SessionStore.list(workspace: ws) { print("  \(s.id.prefix(8))  \(s.turns) turns  \(s.title)") }
                 continue
             }
             if line.hasPrefix("/effort") {
