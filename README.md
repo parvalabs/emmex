@@ -5,7 +5,7 @@ One session API across the built-in on-device model, Private Cloud Compute, MLX 
 pulled from Hugging Face, and Claude. No Ollama, no LM Studio, no server process: models
 run inside the app.
 
-Status: exploration. A headless core and CLI exist; the SwiftUI app is next.
+Status: exploration. A headless core, a CLI, and a first SwiftUI app exist.
 See `docs/FEASIBILITY.md` for the spike results that shaped the design.
 
 ## Requirements
@@ -31,12 +31,27 @@ swift build -c release
 Model specs: `system`, `pcc`, `claude:<sonnet5|opus5_5|opus4_8|id>`, `mlx:<org/name>`.
 MLX weights live in `~/.cache/mlex/models/<org>/<name>`. Set `MLEX_USAGE=1` to print token usage.
 
+## App
+
+```bash
+./scripts/bundle-app.sh debug      # builds MlexApp and wraps it into .build/Mlex.app (ad-hoc signed)
+open .build/Mlex.app
+```
+
+Sidebar: workspace folder, every backend with a ready indicator, and a pull field for
+Hugging Face MLX models with live progress. Detail: streaming chat with a tool timeline.
+Switching models keeps the conversation: the new session starts from the old transcript.
+Private Cloud Compute needs Apple's managed entitlement and a real signing identity; see
+`scripts/Mlex.entitlements`.
+
 ## Layout
 
 | path | what |
 |---|---|
 | `Sources/MlexCore` | model specs and backends, MLX model store (pull, list, load), tools (bash, read, write, edit), agent session with streaming events and transcript persistence |
 | `Sources/mlex` | the CLI |
+| `Sources/MlexApp` | SwiftUI app: model picker, chat, tool timeline |
+| `scripts/` | app bundling and entitlements |
 | `Sources/spike-*` | the three feasibility spikes, kept runnable |
 
 Tools are defined with `DynamicGenerationSchema` rather than `@Generable`, so they can be
