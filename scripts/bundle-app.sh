@@ -3,6 +3,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 CONF=${1:-debug}
+# Real signing (needed for Private Cloud Compute): set MLEX_SIGN_IDENTITY to a "Apple Development: …"
+# identity from `security find-identity -v -p codesigning` and MLEX_PROFILE to a .provisionprofile
+# whose entitlements include com.apple.developer.private-cloud-compute. Otherwise the app is ad-hoc signed.
+IDENTITY=${MLEX_SIGN_IDENTITY:-}
+PROFILE=${MLEX_PROFILE:-}
 swift build -c "$CONF" --product MlexApp
 APP=.build/Mlex.app
 rm -rf "$APP"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -27,5 +32,22 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHumanReadableCopyright</key><string>Gonzalo Vallejos</string>
 </dict></plist>
 PLIST
-codesign --force --sign - --entitlements scripts/Mlex.entitlements "$APP" >/dev/null
+if [ -n "$IDENTITY" ]; then
+  ENT=scripts/Mlex.entitlements
+  if [ -n "$PROFILE" ]; then
+    cp "$PROFILE" "$APP/Contents/embedded.provisionprofile"
+    # Entitlements must match the profile: derive them from it (application-identifier, team, PCC…).
+    ENT=.build/Mlex.entitlements
+    security cms -D -i "$PROFILE" | python3 -c "
+import sys, plistlib
+d = plistlib.loads(sys.stdin.buffer.read())['Entitlements']
+ents = {k: v for k, v in d.items() if k in ('com.apple.application-identifier', 'com.apple.developer.team-identifier', 'com.apple.developer.private-cloud-compute', 'keychain-access-groups')}
+ents['com.apple.security.get-task-allow'] = True
+open('$ENT', 'wb').write(plistlib.dumps(ents))"
+  fi
+  codesign --force --options runtime --timestamp=none --sign "$IDENTITY" --entitlements "$ENT" "$APP"
+  codesign -dvv --entitlements - "$APP" 2>&1 | grep -E "Authority=|private-cloud-compute" | head -3
+else
+  codesign --force --sign - --entitlements scripts/Mlex.entitlements "$APP" >/dev/null
+fi
 echo "built $APP"
