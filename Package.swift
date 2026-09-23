@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "MlexCore", targets: ["MlexCore"]),
         .executable(name: "mlex", targets: ["mlex"]),
+        .executable(name: "MlexApp", targets: ["MlexApp"]),
     ],
     dependencies: [
         .package(url: "https://github.com/anthropics/ClaudeForFoundationModels.git", from: "0.2.1"),
@@ -28,6 +29,7 @@ let package = Package(
             "MlexCore",
             .product(name: "ArgumentParser", package: "swift-argument-parser"),
         ]),
+        .executableTarget(name: "MlexApp", dependencies: ["MlexCore"]),
         .executableTarget(name: "spike-transcript", dependencies: ["MlexCore"]),
         .executableTarget(name: "spike-claude", dependencies: [
             "MlexCore",
