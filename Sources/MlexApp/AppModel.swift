@@ -108,6 +108,15 @@ final class AppModel {
     }
 
     private func handle(_ ev: AgentEvent) {
+        if ProcessInfo.processInfo.environment["MLEX_DEBUG"] != nil {
+            let line: String = switch ev {
+            case .textDelta(let t): "text: \(t)"
+            case .toolCall(let n, let a): "toolCall \(n): \(a)"
+            case .toolResult(let n, let o): "toolResult \(n): \(o.prefix(80))"
+            case .finished(let u, let text): "finished in=\(u?.input.totalTokenCount ?? 0) out=\(u?.output.totalTokenCount ?? 0) text=\(text.prefix(80))"
+            }
+            FileHandle.standardError.write(Data("[mlex] \(line)\n".utf8))
+        }
         switch ev {
         case .textDelta(let t):
             if let last = timeline.indices.last, timeline[last].kind == .assistant {

@@ -15,6 +15,7 @@ struct MlexApp: App {
                     // Debug hook: MLEX_AUTOPROMPT="…" MLEX_WORKSPACE=/path sends a prompt on launch.
                     let env = ProcessInfo.processInfo.environment
                     if let ws = env["MLEX_WORKSPACE"] { model.setWorkspace(URL(fileURLWithPath: ws)) }
+                    if let m = env["MLEX_MODEL"], let spec = try? ModelSpec(parsing: m) { model.select(spec) }
                     if let p = env["MLEX_AUTOPROMPT"] { model.input = p; model.send() }
                 }
         }
