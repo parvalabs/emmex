@@ -237,7 +237,14 @@ function openTools() {
     S.templates.forEach(t => { const r = el('div', 'fact'); r.append(el('span', 'k', 'template'), el('span', '', `/${t.name} ${t.hint || ''} — ${t.description}`)); c.append(r); });
     sec('Memory', 'extracted on-device after each turn'); if (!S.memory.length) c.append(el('div', 'small', 'Nothing remembered yet.'));
     S.memory.forEach(f => { const r = el('div', 'fact'); r.append(el('span', 'k', (f.scope === 'user' ? 'you · ' : '') + f.kind), el('span', '', f.text)); r.title = `used ${f.uses}×`; const x = el('button', 'x', '✕'); x.onclick = () => act({ type: 'forget', id: f.id }); r.append(x); c.append(r); });
-    if (S.memory.length) { const b = el('button', 'btn danger', 'Forget everything'); b.onclick = () => act({ type: 'clear_memory' }); c.append(b); }
+    if (S.memory.length) { const row = el('div', 'pull');
+      const m = el('button', 'btn', 'Consolidate'); m.title = 'Merge overlapping facts; the newest wins on conflicts'; m.onclick = () => { closeModal(); act({ type: 'consolidate_memory' }); };
+      const b = el('button', 'btn danger', 'Forget everything'); b.onclick = () => act({ type: 'clear_memory' }); row.append(m, b); c.append(row); }
+    if (S.archived && S.archived.length) {
+      sec('Archived', 'expired or superseded; restore if still true');
+      S.archived.slice(0, 20).forEach(f => { const r = el('div', 'fact'); r.append(el('span', 'k', f.superseded ? 'replaced' : 'expired'), el('span', 'small', f.text));
+        const x = el('button', 'x', '↩'); x.title = 'Restore'; x.onclick = () => act({ type: 'restore_fact', id: f.id }); r.append(x); c.append(r); });
+    }
     sec('Tools in this session'); c.append(el('div', 'small', S.tools.join(', ')));
   });
 }

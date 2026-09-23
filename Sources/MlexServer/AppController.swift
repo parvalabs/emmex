@@ -69,7 +69,8 @@ public final class AppController {
             "mcpFailures": mcpFailures,
             "skills": commands.skills.map { ["name": $0.name, "description": $0.description] },
             "templates": commands.templates.map { ["name": $0.name, "hint": $0.argumentHint as Any, "description": $0.description] },
-            "memory": memory.sorted { $0.createdAt > $1.createdAt }.map { ["id": $0.id, "kind": $0.kind, "scope": $0.scope, "text": $0.text, "uses": $0.uses] },
+            "memory": memory.filter { !$0.archived }.sorted { $0.score() > $1.score() }.map { ["id": $0.id, "kind": $0.kind, "scope": $0.scope, "text": $0.text, "uses": $0.uses, "score": $0.score()] },
+            "archived": memory.filter(\.archived).sorted { $0.lastUsed > $1.lastUsed }.map { ["id": $0.id, "kind": $0.kind, "scope": $0.scope, "text": $0.text, "superseded": $0.supersededBy != nil] },
             "tools": current?.toolNames ?? [],
             "nativePanels": canUseNativePanels,
         ]
@@ -128,6 +129,12 @@ public final class AppController {
         case "unload": Task { await ModelStore.shared.unloadResident(); await refreshModels(); push() }
         case "forget": if let id = str("id"), let ws = workspace { Task { try? await MemoryStore.shared.remove(id, workspace: ws); await refreshMemory(); push() } }
         case "clear_memory": if let ws = workspace { Task { try? await MemoryStore.shared.clear(workspace: ws); await refreshMemory(); push() } }
+        case "restore_fact": if let id = str("id"), let ws = workspace { Task { try? await MemoryStore.shared.restore(id, workspace: ws); await refreshMemory(); push() } }
+        case "consolidate_memory":
+            guard let ws = workspace else { return ["error": "no workspace"] }
+            let merges = (try? await MemoryStore.shared.consolidate(workspace: ws)) ?? []
+            await refreshMemory(); push()
+            if merges.isEmpty { info("memory: nothing to merge") } else { for m in merges { info("memory: merged \(m.from.count) facts → \(m.merged)") } }
         case "export":
             guard let cur = current else { return ["error": "no session"] }
             try? cur.save()
@@ -167,7 +174,7 @@ public final class AppController {
         }
     }
 
-    func refreshMemory() async { if let ws = workspace { memory = await MemoryStore.shared.facts(workspace: ws) } }
+    func refreshMemory() async { if let ws = workspace { memory = await MemoryStore.shared.allFacts(workspace: ws) } }
 
     // MARK: sessions
 

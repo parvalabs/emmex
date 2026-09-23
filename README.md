@@ -36,8 +36,12 @@ See `docs/FEASIBILITY.md` for the spike results that shaped the design.
   project facts, references), scoped to the project or to you (user-level facts apply in every
   workspace). Retrieval uses Apple's on-device sentence embeddings plus keyword overlap, so a
   differently worded question still finds the fact; duplicates are caught by wording and by
-  embedding similarity; use counts drive pruning. Stored as JSON under Application Support/mlex/
-  memory (one file per workspace plus global.json). `mlex memory list|search|forget|clear`,
+  embedding similarity. Lifecycle: facts are ranked by use count decayed over time (30-day
+  half-life); a fact never used within 30 days or unused for 90 days is archived, not deleted;
+  a new fact on the same subject with a different value supersedes the old one; and
+  consolidation merges overlapping facts with the on-device model, keeping the newest verbatim
+  when they conflict. Stored as JSON under Application Support/mlex/memory (one file per
+  workspace plus global.json). `mlex memory list [--archived]|search|consolidate|forget|restore|clear`,
   `/memory` in chat, Memory in the Tools dialog. Disable with `"memory": false` in settings.
 - **Fork and export**: `sessions fork <id> [--before N]`, `/fork N`, "Fork before this message"
   in the app; `sessions export <id> [file.html|.json]`, `/export`, File > Export Session.

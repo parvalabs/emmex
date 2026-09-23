@@ -15,10 +15,20 @@ public struct MemoryFact: Codable, Identifiable, Sendable, Hashable {
     public var uses: Int
     public var source: String          // session id
     public var embedding: [Float]?
+    public var archived: Bool          // expired or superseded; kept for restore
+    public var supersededBy: String?   // id of the fact that replaced this one
 
-    enum CodingKeys: String, CodingKey { case id, text, kind, scope, createdAt, lastUsed, uses, source, embedding }
-    public init(id: String, text: String, kind: String, scope: String, createdAt: Date, lastUsed: Date, uses: Int, source: String, embedding: [Float]?) {
-        self.id = id; self.text = text; self.kind = kind; self.scope = scope; self.createdAt = createdAt; self.lastUsed = lastUsed; self.uses = uses; self.source = source; self.embedding = embedding
+    enum CodingKeys: String, CodingKey { case id, text, kind, scope, createdAt, lastUsed, uses, source, embedding, archived, supersededBy }
+    public init(id: String, text: String, kind: String, scope: String, createdAt: Date, lastUsed: Date, uses: Int, source: String, embedding: [Float]?, archived: Bool = false, supersededBy: String? = nil) {
+        self.id = id; self.text = text; self.kind = kind; self.scope = scope; self.createdAt = createdAt; self.lastUsed = lastUsed; self.uses = uses; self.source = source; self.embedding = embedding; self.archived = archived; self.supersededBy = supersededBy
+    }
+
+    /// Importance: uses discounted by time since last use (half-life 30 days), plus a small
+    /// freshness bonus so brand-new facts are not ranked below everything.
+    public func score(now: Date = Date()) -> Double {
+        let ageDays = max(0, now.timeIntervalSince(lastUsed) / 86_400)
+        let fresh = max(0, 7 - now.timeIntervalSince(createdAt) / 86_400) / 7
+        return (Double(uses) + 1) * pow(0.5, ageDays / 30) + 0.5 * fresh
     }
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -27,6 +37,8 @@ public struct MemoryFact: Codable, Identifiable, Sendable, Hashable {
         createdAt = try c.decode(Date.self, forKey: .createdAt); lastUsed = try c.decode(Date.self, forKey: .lastUsed)
         uses = try c.decode(Int.self, forKey: .uses); source = try c.decode(String.self, forKey: .source)
         embedding = try c.decodeIfPresent([Float].self, forKey: .embedding)
+        archived = try c.decodeIfPresent(Bool.self, forKey: .archived) ?? false
+        supersededBy = try c.decodeIfPresent(String.self, forKey: .supersededBy)
     }
 }
 
@@ -34,7 +46,11 @@ public actor MemoryStore {
     public static let shared = MemoryStore()
     static let maxFacts = 400
     static let duplicateCosine: Float = 0.90
+    static let supersedeCosine: Float = 0.78     // same subject, different content: newer replaces older
+    static let clusterCosine: Float = 0.55       // consolidation groups (0.40 if a keyword is shared)
     static let relevantCosine: Float = 0.25
+    static let expireUnusedDays = 30.0            // never used since creation
+    static let expireIdleDays = 90.0              // not used for this long
 
     public func url(for workspace: URL) -> URL { Paths.appSupport.appending(path: "memory").appending(path: "\(Paths.key(for: workspace)).json") }
     public var globalURL: URL { Paths.appSupport.appending(path: "memory/global.json") }
@@ -48,12 +64,31 @@ public actor MemoryStore {
         try SessionStore.encoder.encode(facts).write(to: u, options: .atomic)
     }
 
-    /// Project facts plus user-level facts. Facts saved before embeddings existed get one now.
+    /// Active project facts plus user-level facts. Facts saved before embeddings existed get one
+    /// now, and facts that were never used within 30 days or not used for 90 days are archived.
     public func facts(workspace: URL) async -> [MemoryFact] {
+        (await allFacts(workspace: workspace)).filter { !$0.archived }
+    }
+
+    /// Every fact including archived ones, after backfill and expiry.
+    public func allFacts(workspace: URL) async -> [MemoryFact] {
         var project = read(url(for: workspace)), global = read(globalURL)
-        if await backfill(&project) { try? write(project, to: url(for: workspace)) }
-        if await backfill(&global) { try? write(global, to: globalURL) }
+        var c1 = await backfill(&project), c2 = await backfill(&global)
+        if Self.expire(&project) { c1 = true }
+        if Self.expire(&global) { c2 = true }
+        if c1 { try? write(project, to: url(for: workspace)) }
+        if c2 { try? write(global, to: globalURL) }
         return project + global
+    }
+
+    static func expire(_ facts: inout [MemoryFact], now: Date = Date()) -> Bool {
+        var changed = false
+        for i in facts.indices where !facts[i].archived {
+            let idle = now.timeIntervalSince(facts[i].lastUsed) / 86_400
+            let age = now.timeIntervalSince(facts[i].createdAt) / 86_400
+            if (facts[i].uses == 0 && age > expireUnusedDays) || idle > expireIdleDays { facts[i].archived = true; changed = true }
+        }
+        return changed
     }
 
     private func backfill(_ facts: inout [MemoryFact]) async -> Bool {
@@ -68,39 +103,96 @@ public actor MemoryStore {
     @discardableResult
     public func add(_ new: [(text: String, kind: String, scope: String)], workspace: URL, source: String) async throws -> [MemoryFact] {
         var project = read(url(for: workspace)), global = read(globalURL)
-        let existing = project + global
-        var normalized = Set(existing.map { Self.normalize($0.text) })
-        var keywordSets = existing.map { Set(Self.keywords($0.text)) }
-        var vectors = existing.compactMap(\.embedding)
         var added: [MemoryFact] = []
         for n in new {
             let t = n.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard t.count >= 8, t.count <= 300, normalized.insert(Self.normalize(t)).inserted else { continue }
+            guard t.count >= 8, t.count <= 300 else { continue }
+            let active = (project + global).filter { !$0.archived }
+            if active.contains(where: { Self.normalize($0.text) == Self.normalize(t) }) { continue }
             let kw = Set(Self.keywords(t))
-            if !kw.isEmpty, keywordSets.contains(where: { other in
-                guard !other.isEmpty else { return false }
-                let inter = kw.intersection(other).count
-                return Double(inter) / Double(kw.union(other).count) >= 0.45 || inter == min(kw.count, other.count)
-            }) { continue }
             let vec = await Embedder.shared.vector(for: t)
-            if let vec, vectors.contains(where: { Embedder.cosine($0, vec) >= Self.duplicateCosine }) { continue }
-            keywordSets.append(kw); if let vec { vectors.append(vec) }
+            // Relationship to each active fact: same subject and same content is a duplicate;
+            // same subject with different content (a changed command, a revised decision) means
+            // the new fact supersedes the old one.
+            var isDuplicate = false
+            var supersedes: [String] = []
+            for f in active {
+                let other = Set(Self.keywords(f.text))
+                let inter = kw.intersection(other).count
+                let overlap = kw.isEmpty || other.isEmpty ? 0 : Double(inter) / Double(kw.union(other).count)
+                let sim: Float = (vec != nil && f.embedding != nil) ? Embedder.cosine(vec!, f.embedding!) : 0
+                let sameSubject = sim >= Self.supersedeCosine || overlap >= 0.45 || (inter > 0 && inter == min(kw.count, other.count))
+                guard sameSubject else { continue }
+                let sameContent = kw == other || kw.isSubset(of: other) || sim >= Self.duplicateCosine && overlap >= 0.6
+                if sameContent { isDuplicate = true; break } else { supersedes.append(f.id) }
+            }
+            if isDuplicate { continue }
             let fact = MemoryFact(id: UUID().uuidString.lowercased(), text: t, kind: n.kind, scope: n.scope == "user" ? "user" : "project",
                                   createdAt: Date(), lastUsed: Date(), uses: 0, source: source, embedding: vec)
+            let ids = Set(supersedes)
+            for i in project.indices where ids.contains(project[i].id) { project[i].archived = true; project[i].supersededBy = fact.id }
+            for i in global.indices where ids.contains(global[i].id) { global[i].archived = true; global[i].supersededBy = fact.id }
             if fact.scope == "user" { global.append(fact) } else { project.append(fact) }
             added.append(fact)
-        }
-        for list in [project, global] where list.count > Self.maxFacts {
-            // Prune least-used, oldest first.
         }
         project = Self.prune(project); global = Self.prune(global)
         try write(project, to: url(for: workspace)); try write(global, to: globalURL)
         return added
     }
 
+    /// Keep the cap by importance score; archived facts are dropped first, then the lowest scores.
     static func prune(_ facts: [MemoryFact]) -> [MemoryFact] {
         guard facts.count > maxFacts else { return facts }
-        return Array(facts.sorted { ($0.uses, $0.lastUsed) > ($1.uses, $1.lastUsed) }.prefix(maxFacts))
+        let active = facts.filter { !$0.archived }.sorted { $0.score() > $1.score() }
+        let archived = facts.filter(\.archived).sorted { $0.lastUsed > $1.lastUsed }
+        return Array((active + archived).prefix(maxFacts))
+    }
+
+    public func restore(_ id: String, workspace: URL) throws {
+        for u in [url(for: workspace), globalURL] {
+            var facts = read(u)
+            if let i = facts.firstIndex(where: { $0.id == id }) { facts[i].archived = false; facts[i].supersededBy = nil; facts[i].lastUsed = Date(); try write(facts, to: u) }
+        }
+    }
+
+    /// Merge overlapping facts with the on-device model. Within a cluster the most recent fact
+    /// wins on conflicts; the merged fact inherits the newest date, the summed uses, and the
+    /// latest last-used time. Originals are archived as superseded. Returns merges made.
+    public func consolidate(workspace: URL) async throws -> [(merged: String, from: [String])] {
+        var result: [(String, [String])] = []
+        for u in [url(for: workspace), globalURL] {
+            var facts = read(u)
+            let active = facts.indices.filter { !facts[$0].archived && facts[$0].embedding != nil }
+            var seen = Set<Int>()
+            for i in active where !seen.contains(i) {
+                var cluster = [i]; seen.insert(i)
+                let kwI = Set(Self.keywords(facts[i].text))
+                for j in active where !seen.contains(j) {
+                    let sim = Embedder.cosine(facts[i].embedding!, facts[j].embedding!)
+                    let shared = !kwI.intersection(Self.keywords(facts[j].text)).isEmpty
+                    if sim >= Self.clusterCosine || (sim >= 0.40 && shared) { cluster.append(j); seen.insert(j) }
+                }
+                guard cluster.count > 1 else { continue }
+                let members = cluster.map { facts[$0] }.sorted { $0.createdAt > $1.createdAt }   // newest first
+                // The model only classifies the cluster; on duplicate or conflict the newest fact is
+                // kept verbatim, so "newest wins" is guaranteed rather than hoped for.
+                let relation = (try? await MemoryConsolidator.relation(members.map(\.text))) ?? "complementary"
+                let text: String
+                if relation == "complementary" {
+                    guard let merged = try await MemoryConsolidator.merge(members.map(\.text)) else { continue }
+                    text = merged
+                } else { text = members[0].text }
+                let vec = await Embedder.shared.vector(for: text)
+                let merged = MemoryFact(id: UUID().uuidString.lowercased(), text: text, kind: members[0].kind, scope: members[0].scope,
+                                        createdAt: members[0].createdAt, lastUsed: members.map(\.lastUsed).max() ?? Date(),
+                                        uses: members.map(\.uses).reduce(0, +), source: members[0].source, embedding: vec)
+                for k in cluster { facts[k].archived = true; facts[k].supersededBy = merged.id }
+                facts.append(merged)
+                result.append((text, members.map(\.text)))
+            }
+            if !result.isEmpty { try write(Self.prune(facts), to: u) }
+        }
+        return result
     }
 
     public func remove(_ id: String, workspace: URL) throws {
@@ -133,7 +225,7 @@ public actor MemoryStore {
         var scored: [(MemoryFact, Float)] = facts.map { f in
             let kw = Float(Set(Self.keywords(f.text)).intersection(words).count)
             let sim: Float = (qv != nil && f.embedding != nil) ? Embedder.cosine(qv!, f.embedding!) : 0
-            var score = sim + 0.15 * kw
+            var score = sim + 0.15 * kw + 0.02 * Float(min(f.score(), 5))
             if f.kind == "preference" { score += 0.05 }
             if sim < Self.relevantCosine, kw == 0 { score = 0 }
             return (f, score)
@@ -191,5 +283,38 @@ public enum MemoryExtractor {
             guard let t = try? item.value(String.self, forProperty: "text") else { return nil }
             return (t, (try? item.value(String.self, forProperty: "kind")) ?? "other", (try? item.value(String.self, forProperty: "scope")) ?? "project")
         }
+    }
+}
+
+
+/// Merges a cluster of overlapping facts into one sentence with the on-device model.
+public enum MemoryConsolidator {
+    /// duplicate: same information; conflict: different values for the same thing; complementary:
+    /// different details about the same subject that can be combined.
+    public static func relation(_ texts: [String]) async throws -> String {
+        let schema = try GenerationSchema(root: DynamicGenerationSchema(name: "Relation", properties: [
+            .init(name: "relation", description: "How the facts relate", schema: SchemaBuilder.choice("Rel", ["duplicate", "conflict", "complementary"])),
+        ]), dependencies: [])
+        let session = LanguageModelSession(model: .default, instructions: """
+        You compare remembered facts about the same subject. Answer duplicate if they say the same \
+        thing in different words; conflict if they give different values for the same thing (a \
+        different command, name, path, number, or setting); complementary if they add different \
+        details that do not contradict each other.
+        """)
+        let input = texts.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+        let r = try await session.respond(to: input, schema: schema, options: GenerationOptions(maximumResponseTokens: 20))
+        return (try? r.content.value(String.self, forProperty: "relation")) ?? "complementary"
+    }
+
+    static let instructions = """
+    You merge several remembered facts about the same subject into ONE short, self-contained     sentence. The facts are ordered newest first. Where they conflict, the newest fact is     correct and older ones are outdated. Keep exact names, paths, commands, and values. Do not     add anything that is not in the facts.
+    """
+    public static func merge(_ texts: [String]) async throws -> String? {
+        let schema = try SchemaBuilder.object("Merged", [("text", "The single merged fact", SchemaBuilder.string)])
+        let session = LanguageModelSession(model: .default, instructions: instructions)
+        let input = texts.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+        let r = try await session.respond(to: input, schema: schema, options: GenerationOptions(maximumResponseTokens: 120))
+        let t = (try? r.content.value(String.self, forProperty: "text"))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return t.count >= 8 ? t : nil
     }
 }

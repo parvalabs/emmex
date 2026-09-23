@@ -193,6 +193,7 @@ public final class AgentSession: @unchecked Sendable {
         }.joined(separator: " ")
         do {
             let facts = try await MemoryExtractor.extract(prompt: prompt, response: response, toolSummary: tools)
+            if ProcessInfo.processInfo.environment["MLEX_DEBUG"] != nil { FileHandle.standardError.write(Data("[mlex] extracted: \(facts)\n".utf8)) }
             let added = try await MemoryStore.shared.add(facts, workspace: record.workspaceURL, source: record.id)
             if !added.isEmpty { sink(.info("remembered: " + added.map { ($0.scope == "user" ? "[you] " : "") + $0.text }.joined(separator: " · "))) }
         } catch {
@@ -241,8 +242,8 @@ public final class AgentSession: @unchecked Sendable {
         }
         if Settings.load().memory {
             let facts = await MemoryStore.shared.facts(workspace: workspace)
-            let prefs = facts.filter { $0.kind == "preference" }.sorted { $0.createdAt > $1.createdAt }
-            let others = facts.filter { $0.kind != "preference" }.sorted { $0.createdAt > $1.createdAt }
+            let prefs = facts.filter { $0.kind == "preference" }.sorted { $0.score() > $1.score() }
+            let others = facts.filter { $0.kind != "preference" }.sorted { $0.score() > $1.score() }
             let picked = Array((prefs + others).prefix(small ? 6 : 15))
             if let mem = MemoryStore.promptSection(picked) { parts.append(mem); await MemoryStore.shared.markUsed(picked.map(\.id), workspace: workspace) }
         }

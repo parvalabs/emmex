@@ -206,7 +206,26 @@ struct Serve: AsyncParsableCommand {
 
 struct MemoryCmd: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "memory", abstract: "Facts remembered for a workspace.",
-                                                    subcommands: [List.self, Search.self, Forget.self, Clear.self], defaultSubcommand: List.self)
+                                                    subcommands: [List.self, Search.self, Forget.self, Restore.self, Consolidate.self, Clear.self], defaultSubcommand: List.self)
+    struct Restore: AsyncParsableCommand {
+        @Argument var id: String
+        @Option(name: .long) var workspace: String?
+        func run() async throws {
+            let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+            guard let f = await MemoryStore.shared.allFacts(workspace: ws).first(where: { $0.id.hasPrefix(id) }) else { throw ValidationError("no fact matching \(id)") }
+            try await MemoryStore.shared.restore(f.id, workspace: ws); print("restored: \(f.text)")
+        }
+    }
+    struct Consolidate: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Merge overlapping facts with the on-device model; the newest wins on conflicts.")
+        @Option(name: .long) var workspace: String?
+        func run() async throws {
+            let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+            let merges = try await MemoryStore.shared.consolidate(workspace: ws)
+            if merges.isEmpty { print("nothing to merge") }
+            for m in merges { print("merged \(m.from.count) → \(m.merged)"); for f in m.from { print("    ← \(f)") } }
+        }
+    }
     struct Search: AsyncParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Show which facts would be retrieved for a prompt.")
         @Argument var prompt: String
@@ -220,11 +239,15 @@ struct MemoryCmd: AsyncParsableCommand {
     }
     struct List: AsyncParsableCommand {
         @Option(name: .long) var workspace: String?
+        @Flag(name: .long, help: "Include archived (expired or superseded) facts.") var archived = false
         func run() async throws {
             let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
-            let facts = await MemoryStore.shared.facts(workspace: ws)
+            let facts = archived ? await MemoryStore.shared.allFacts(workspace: ws) : await MemoryStore.shared.facts(workspace: ws)
             if facts.isEmpty { print("nothing remembered for \(ws.path)"); return }
-            for f in facts.sorted(by: { $0.createdAt > $1.createdAt }) { print("\(f.id.prefix(8))  \(f.scope.padding(toLength: 7, withPad: " ", startingAt: 0)) \(f.kind.padding(toLength: 10, withPad: " ", startingAt: 0))  \(f.uses)×  \(f.text)") }
+            for f in facts.sorted(by: { $0.score() > $1.score() }) {
+                let flag = f.archived ? (f.supersededBy != nil ? "superseded" : "archived  ") : String(format: "%5.2f     ", f.score())
+                print("\(f.id.prefix(8))  \(flag)  \(f.scope.padding(toLength: 7, withPad: " ", startingAt: 0)) \(f.kind.padding(toLength: 10, withPad: " ", startingAt: 0))  \(f.uses)×  \(f.text)")
+            }
         }
     }
     struct Forget: AsyncParsableCommand {
