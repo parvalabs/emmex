@@ -56,7 +56,12 @@ struct Sidebar: View {
                 ForEach(model.pulls.keys.sorted(), id: \.self) { id in
                     VStack(alignment: .leading) {
                         Text(id).font(.caption).lineLimit(1)
-                        ProgressView(value: model.pulls[id] ?? 0)
+                        HStack {
+                            ProgressView(value: model.pulls[id] ?? 0)
+                            Text("\(Int((model.pulls[id] ?? 0) * 100))%").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            Button { model.cancelPull(id) } label: { Image(systemName: "xmark.circle.fill") }
+                                .buttonStyle(.plain).foregroundStyle(.secondary).help("Cancel")
+                        }
                     }
                 }
                 ForEach(model.pullErrors.keys.sorted(), id: \.self) { id in

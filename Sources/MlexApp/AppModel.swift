@@ -20,6 +20,7 @@ final class AppModel {
     var pullID: String = "mlx-community/Qwen3-4B-4bit"
     var pulls: [String: Double] = [:]          // id -> fraction
     var pullErrors: [String: String] = [:]
+    private var pullTasks: [String: Task<Void, Never>] = [:]
 
     // Session
     var selected: ModelSpec = .system
@@ -43,18 +44,24 @@ final class AppModel {
         let id = pullID.trimmingCharacters(in: .whitespaces)
         guard !id.isEmpty, pulls[id] == nil else { return }
         pulls[id] = 0; pullErrors[id] = nil
-        Task {
+        pullTasks[id] = Task {
             do {
                 _ = try await ModelStore.shared.pull(id) { fraction, _ in
                     Task { @MainActor in self.pulls[id] = fraction }
                 }
-                pulls[id] = nil
                 await refresh()
+            } catch is CancellationError {
+                // partial files stay on disk; the next pull resumes
             } catch {
-                pulls[id] = nil
                 pullErrors[id] = "\(error)"
             }
+            pulls[id] = nil
+            pullTasks[id] = nil
         }
+    }
+
+    func cancelPull(_ id: String) {
+        pullTasks[id]?.cancel()
     }
 
     func remove(_ id: String) {
