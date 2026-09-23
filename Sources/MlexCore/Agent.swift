@@ -48,7 +48,7 @@ public final class AgentSession: @unchecked Sendable {
         self.baseInstructions = base
         self.session = try await Backends.makeSession(
             spec, tools: tools,
-            instructions: Self.compose(base, workspace: record.workspaceURL, cwd: record.cwdURL, spec: spec),
+            instructions: await Self.compose(base, workspace: record.workspaceURL, cwd: record.cwdURL, spec: spec),
             transcript: record.transcript.isEmpty ? nil : Compactor.sanitized(record.transcript),
             onWarning: { sink(.warning($0)) })
     }
@@ -147,18 +147,45 @@ public final class AgentSession: @unchecked Sendable {
             if needed, try await compact() == nil { sink(.info("context \(used)/\(size) tokens; nothing old enough to compact yet")) }
         }
         await routeIfAuto(prompt)
+        let sent = await withMemory(prompt)
+        let text: String
         do {
-            return try await runOnce(prompt, effort: effort)
+            text = try await runOnce(sent, effort: effort)
         } catch let error as LanguageModelSession.GenerationError {
             guard case .exceededContextWindowSize = error, autoCompact else { throw error }
             sink(.info("context window exceeded, compacting and retrying…"))
             try await compact()
-            return try await runOnce(prompt, effort: effort)
+            text = try await runOnce(sent, effort: effort)
         } catch let error as LanguageModelError {
             guard case .contextSizeExceeded = error, autoCompact else { throw error }
             sink(.info("context window exceeded, compacting and retrying…"))
             try await compact()
-            return try await runOnce(prompt, effort: effort)
+            text = try await runOnce(sent, effort: effort)
+        }
+        await remember(prompt: prompt, response: text)
+        return text
+    }
+
+    /// Prepend facts relevant to this prompt (beyond the ones already in the instructions).
+    private func withMemory(_ prompt: String) async -> String {
+        guard Settings.load().memory else { return prompt }
+        let facts = await MemoryStore.shared.relevant(to: prompt, workspace: record.workspaceURL, limit: 5)
+        guard !facts.isEmpty else { return prompt }
+        return "Relevant memory:\n" + facts.map { "- \($0.text)" }.joined(separator: "\n") + "\n\n" + prompt
+    }
+
+    /// Extract durable facts from the turn with the on-device model and store them.
+    private func remember(prompt: String, response: String) async {
+        guard Settings.load().memory, response.count > 20, !prompt.hasPrefix("Summary of the conversation") else { return }
+        let tools = session.transcript.suffix(8).compactMap { e -> String? in
+            if case .toolCalls(let c) = e { return c.map(\.toolName).joined(separator: ",") } else { return nil }
+        }.joined(separator: " ")
+        do {
+            let facts = try await MemoryExtractor.extract(prompt: prompt, response: response, toolSummary: tools)
+            let added = try await MemoryStore.shared.add(facts, workspace: record.workspaceURL, source: record.id)
+            if added > 0 { sink(.info("remembered: " + facts.prefix(added).map(\.text).joined(separator: " · "))) }
+        } catch {
+            // Memory is best effort; never fail the turn over it.
         }
     }
 
@@ -187,14 +214,21 @@ public final class AgentSession: @unchecked Sendable {
         return last
     }
 
-    /// Base instructions plus skills listing and project context files. Apple's on-device
-    /// model has a small window, so those extras are trimmed harder for it.
-    static func compose(_ base: String, workspace: URL, cwd: URL, spec: ModelSpec) -> String {
-        let small = spec == .system
+    /// Base instructions plus skills listing, project context files, and remembered facts.
+    /// Apple's on-device model has a small window, so those extras are trimmed harder for it.
+    static func compose(_ base: String, workspace: URL, cwd: URL, spec: ModelSpec) async -> String {
+        let small = spec == .system || spec == .auto
         var parts = [base, "Working directory: \(cwd.path)"]
         if let skills = Skills.promptSection(Skills.discover(workspace: workspace), limit: small ? 8 : 30) { parts.append(skills) }
         if let ctx = ContextFiles.load(workspace: workspace, cwd: cwd) {
             parts.append(small ? String(ctx.prefix(1500)) : ctx)
+        }
+        if Settings.load().memory {
+            let facts = await MemoryStore.shared.facts(workspace: workspace)
+            let prefs = facts.filter { $0.kind == "preference" }.sorted { $0.createdAt > $1.createdAt }
+            let others = facts.filter { $0.kind != "preference" }.sorted { $0.createdAt > $1.createdAt }
+            let picked = Array((prefs + others).prefix(small ? 6 : 15))
+            if let mem = MemoryStore.promptSection(picked) { parts.append(mem) }
         }
         return parts.joined(separator: "\n\n")
     }

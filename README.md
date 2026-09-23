@@ -28,6 +28,16 @@ See `docs/FEASIBILITY.md` for the spike results that shaped the design.
 - **Context files** `AGENTS.md`, `CLAUDE.md`, `.mlex/SYSTEM.md`, `.mlex/APPEND_SYSTEM.md`.
 - **Compaction**: older turns are folded into an on-device summary automatically when the
   context nears the window, or on demand.
+- **Auto model**: `-m auto` routes each message to a tier (local, cheap, frontier) chosen by an
+  on-device classifier, or by TypeSafe Jev with `"router": "jev"` in `~/.mlex/settings.json`
+  and a key in Keychain service `mlex-jev`. Tiers map to specs in `settings.json` `routes`
+  (default `system`, `claude:haiku`, `claude:sonnet5`) with fallback when a backend is missing.
+- **Memory**: after each turn the on-device model extracts durable facts (preferences, decisions,
+  project facts) into a per-workspace store; they are injected at session start and retrieved
+  per message. `mlex memory list|forget|clear`, `/memory` in chat, Memory in the Tools sheet.
+  Disable with `"memory": false` in settings.
+- **Fork and export**: `sessions fork <id> [--before N]`, `/fork N`, "Fork before this message"
+  in the app; `sessions export <id> [file.html|.json]`, `/export`, File > Export Session.
 - **Effort** per message: `off | low | medium | high` (Claude effort, MLX thinking on/off).
 - **Memory-aware model loading**: one MLX model resident at a time, with headroom warnings.
 
@@ -44,12 +54,15 @@ swift build -c release
 .build/release/mlex sessions list                     # sessions for the current workspace
 .build/release/mlex worktrees list|add|remove
 .build/release/mlex mcp                               # configured MCP servers and their tools
+.build/release/mlex chat -m auto                      # route each message to the cheapest capable tier
+.build/release/mlex memory list                       # what mlex remembers about this workspace
 ```
 
-In chat: `/model <spec>`, `/effort <level>`, `/title <text>`, `/compact`, `/context`,
-`/skills`, `/prompts`, `/tools`, `/sessions`, `/skill:<name> [args]`, `/<template> [args]`.
+In chat: `/model <spec>`, `/effort <level>`, `/title <text>`, `/compact`, `/context`, `/route`,
+`/memory`, `/fork [N]`, `/export [file]`, `/skills`, `/prompts`, `/tools`, `/sessions`,
+`/skill:<name> [args]`, `/<template> [args]`.
 
-Model specs: `system`, `pcc`, `claude:<sonnet5|opus5_5|opus4_8|id>`, `mlx:<org/name>`.
+Model specs: `auto`, `system`, `pcc`, `claude:<sonnet5|haiku|opus5_5|opus4_8|id>`, `mlx:<org/name>`.
 MLX weights live in `~/.cache/mlex/models/<org>/<name>`. Set `MLEX_USAGE=1` to print token usage.
 
 ## Memory

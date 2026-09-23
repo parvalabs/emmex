@@ -87,6 +87,18 @@ struct WorkspaceInfoSheet: View {
                             VStack(alignment: .leading, spacing: 1) { Text("/\(t.name) \(t.argumentHint ?? "")").font(Theme.mono); Text(t.description).font(Theme.small).foregroundStyle(Theme.muted).lineLimit(2) }
                         }
                     }
+                    section("Memory", hint: "extracted on-device after each turn") {
+                        if model.memory.isEmpty { Text("Nothing remembered yet.").font(Theme.small).foregroundStyle(Theme.muted) }
+                        ForEach(model.memory.sorted { $0.createdAt > $1.createdAt }) { f in
+                            HStack(alignment: .top, spacing: 6) {
+                                Text(f.kind).font(Theme.small).foregroundStyle(Theme.accent).frame(width: 66, alignment: .leading)
+                                Text(f.text).font(Theme.small)
+                                Spacer()
+                                Button { model.forget(f.id) } label: { Image(systemName: "xmark") }.buttonStyle(.plain).foregroundStyle(Theme.muted)
+                            }
+                        }
+                        if !model.memory.isEmpty { Button("Forget everything", role: .destructive) { model.clearMemory() }.controlSize(.small) }
+                    }
                     section("Tools in this session", hint: nil) {
                         Text((model.current?.toolNames ?? []).joined(separator: ", ")).font(Theme.small).foregroundStyle(Theme.muted)
                     }

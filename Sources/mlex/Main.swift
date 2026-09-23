@@ -10,7 +10,7 @@ import MlexCore
     }
     static let configuration = CommandConfiguration(
         abstract: "mlex: local-first agent on Apple Foundation Models, MLX models, and Claude.",
-        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self],
+        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self, MemoryCmd.self],
         defaultSubcommand: Chat.self)
 }
 
@@ -177,6 +177,38 @@ struct WorktreesCmd: AsyncParsableCommand {
     }
 }
 
+// MARK: memory
+
+struct MemoryCmd: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "memory", abstract: "Facts remembered for a workspace.",
+                                                    subcommands: [List.self, Forget.self, Clear.self], defaultSubcommand: List.self)
+    struct List: AsyncParsableCommand {
+        @Option(name: .long) var workspace: String?
+        func run() async throws {
+            let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+            let facts = await MemoryStore.shared.facts(workspace: ws)
+            if facts.isEmpty { print("nothing remembered for \(ws.path)"); return }
+            for f in facts.sorted(by: { $0.createdAt > $1.createdAt }) { print("\(f.id.prefix(8))  \(f.kind.padding(toLength: 10, withPad: " ", startingAt: 0))  \(f.text)") }
+        }
+    }
+    struct Forget: AsyncParsableCommand {
+        @Argument var id: String
+        @Option(name: .long) var workspace: String?
+        func run() async throws {
+            let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+            guard let f = await MemoryStore.shared.facts(workspace: ws).first(where: { $0.id.hasPrefix(id) }) else { throw ValidationError("no fact matching \(id)") }
+            try await MemoryStore.shared.remove(f.id, workspace: ws); print("forgot: \(f.text)")
+        }
+    }
+    struct Clear: AsyncParsableCommand {
+        @Option(name: .long) var workspace: String?
+        func run() async throws {
+            let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+            try await MemoryStore.shared.clear(workspace: ws); print("cleared memory for \(ws.path)")
+        }
+    }
+}
+
 // MARK: mcp
 
 struct MCPCmd: AsyncParsableCommand {
@@ -259,6 +291,10 @@ struct Chat: AsyncParsableCommand {
             if line == "/context" {
                 let (used, size) = await agent.contextUsage()
                 print("context: \(used) / \(size) tokens"); continue
+            }
+            if line == "/memory" {
+                for f in await MemoryStore.shared.facts(workspace: ws) { print("  [\(f.kind)] \(f.text)") }
+                continue
             }
             if line == "/route" {
                 if let d = agent.lastRoute { print("last route: \(d.tier.rawValue) via \(d.router) (\(Int(d.confidence * 100))%) → \(agent.effectiveSpec) \(d.reason)") } else { print("no routing yet (model must be auto)") }

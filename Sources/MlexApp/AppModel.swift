@@ -59,6 +59,11 @@ final class AppModel {
     // Sheets
     var showModels = false
     var showWorkspaceInfo = false
+    var memory: [MemoryFact] = []
+
+    func refreshMemory() async { if let ws = workspace { memory = await MemoryStore.shared.facts(workspace: ws) } }
+    func forget(_ id: String) { Task { if let ws = workspace { try? await MemoryStore.shared.remove(id, workspace: ws) }; await refreshMemory() } }
+    func clearMemory() { Task { if let ws = workspace { try? await MemoryStore.shared.clear(workspace: ws) }; await refreshMemory() } }
 
     /// Incremented on every workspace open or session switch; stale async loads check it and bail.
     private var generation = 0
@@ -110,6 +115,7 @@ final class AppModel {
             guard gen == generation else { return }
             mcpSummary = await mcp.summary()
             mcpFailures = await mcp.failures
+            await refreshMemory()
             if let first = sessions.first { resume(first.id) } else { newSession() }
         }
     }
@@ -272,6 +278,7 @@ final class AppModel {
             catch is CancellationError { timeline.append(.init(kind: .info, text: "stopped")) }
             catch { debug("run error: \(error)"); timeline.append(.init(kind: .error, text: "\(error)")) }
             await updateContext()
+            await refreshMemory()
             busy = false
             runTask = nil
             if let ws = workspace { sessions = SessionStore.list(workspace: ws) }
