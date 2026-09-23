@@ -15,6 +15,7 @@ let package = Package(
         .package(url: "https://github.com/huggingface/swift-huggingface", from: "0.9.0"),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
+        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1"),
     ],
     targets: [
         .target(name: "MlexCore", dependencies: [
@@ -24,6 +25,7 @@ let package = Package(
             .product(name: "MLXLLM", package: "mlx-swift-lm"),
             .product(name: "HuggingFace", package: "swift-huggingface"),
             .product(name: "Tokenizers", package: "swift-transformers"),
+            .product(name: "MCP", package: "swift-sdk"),
         ]),
         .executableTarget(name: "mlex", dependencies: [
             "MlexCore",

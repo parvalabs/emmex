@@ -22,21 +22,28 @@ public final class AgentSession: @unchecked Sendable {
 
     /// Start a new session in `workspace` (tools run in `cwd`, which defaults to the workspace).
     public convenience init(spec: ModelSpec, workspace: URL, cwd: URL? = nil, worktree: String? = nil,
-                            instructions: String? = nil, sink: @escaping EventSink) async throws {
+                            instructions: String? = nil, mcp: MCPHost? = nil, sink: @escaping EventSink) async throws {
         let record = SessionRecord(workspace: workspace, cwd: cwd ?? workspace, worktree: worktree, model: spec)
-        try await self.init(record: record, spec: spec, instructions: instructions, sink: sink)
+        try await self.init(record: record, spec: spec, instructions: instructions, mcp: mcp, sink: sink)
     }
 
+    /// Names of every tool available to this session, built-in and MCP.
+    public private(set) var toolNames: [String] = []
+
     /// Resume a saved session, optionally on a different model (the transcript carries over).
+    /// `mcp` adds the tools of every connected MCP server.
     public init(record: SessionRecord, spec: ModelSpec? = nil, instructions: String? = nil,
-                sink: @escaping EventSink) async throws {
+                mcp: MCPHost? = nil, sink: @escaping EventSink) async throws {
         var record = record
         let spec = spec ?? record.spec
         record.model = spec.description
         self.spec = spec; self.cwd = record.cwd; self.sink = sink; self.record = record
         let ctx = ToolContext(cwd: record.cwd, report: sink)
+        var tools = Tools.standard(ctx)
+        if let mcp { tools += await mcp.tools(ctx: ctx) }
+        self.toolNames = tools.map(\.name)
         self.session = try await Backends.makeSession(
-            spec, tools: Tools.standard(ctx),
+            spec, tools: tools,
             instructions: instructions ?? Self.defaultInstructions,
             transcript: record.transcript.isEmpty ? nil : record.transcript,
             onWarning: { sink(.warning($0)) })

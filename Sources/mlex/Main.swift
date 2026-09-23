@@ -10,7 +10,7 @@ import MlexCore
     }
     static let configuration = CommandConfiguration(
         abstract: "mlex: local-first agent on Apple Foundation Models, MLX models, and Claude.",
-        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self],
+        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self],
         defaultSubcommand: Chat.self)
 }
 
@@ -130,6 +130,26 @@ struct WorktreesCmd: AsyncParsableCommand {
     }
 }
 
+// MARK: mcp
+
+struct MCPCmd: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "mcp", abstract: "Show configured MCP servers (~/.mlex/mcp.json and .mlex/mcp.json) and their tools.")
+    @Option(name: .long) var workspace: String?
+    func run() async throws {
+        let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+        let configs = MCPServerConfig.load(workspace: ws)
+        if configs.isEmpty { print("no MCP servers configured; add {\"mcpServers\": {...}} to ~/.mlex/mcp.json or .mlex/mcp.json"); return }
+        let host = MCPHost()
+        await host.connect(workspace: ws)
+        for s in await host.summary() {
+            print("● \(s.server)  (\(s.info))")
+            for t in s.tools { print("    \(t)") }
+        }
+        for (name, err) in await host.failures { print("○ \(name)  failed: \(err)") }
+        await host.disconnectAll()
+    }
+}
+
 // MARK: run / chat
 
 struct Run: AsyncParsableCommand {
@@ -139,8 +159,12 @@ struct Run: AsyncParsableCommand {
     @Argument(parsing: .remaining) var prompt: [String]
 
     func run() async throws {
-        let agent = try await AgentSession(spec: try model.spec(), cwd: cwd ?? FileManager.default.currentDirectoryPath, sink: Printer.print)
+        let dir = URL(fileURLWithPath: cwd ?? FileManager.default.currentDirectoryPath)
+        let mcp = MCPHost(); await mcp.connect(workspace: dir) { FileHandle.standardError.write(Data("\($0)\n".utf8)) }
+        let agent = try await AgentSession(spec: try model.spec(), workspace: dir, mcp: mcp, sink: Printer.print)
+        agent.autosave = false
         try await agent.run(prompt.joined(separator: " "), effort: try model.effortLevel())
+        await mcp.disconnectAll()
         print()
     }
 }
@@ -156,11 +180,12 @@ struct Chat: AsyncParsableCommand {
         let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
         WorkspaceStore.touch(ws)
         var effort = try model.effortLevel()
+        let mcp = MCPHost(); await mcp.connect(workspace: ws) { print($0) }
         var agent: AgentSession
         if let resume {
             guard let record = try SessionStore.find(resume) else { throw ValidationError("no session matching \(resume)") }
             let override = model.model == "system" ? nil : try model.spec()   // only override when --model was given explicitly
-            agent = try await AgentSession(record: record, spec: override, sink: Printer.print)
+            agent = try await AgentSession(record: record, spec: override, mcp: mcp, sink: Printer.print)
             effort = record.effort
             print("resumed \(record.id.prefix(8)) “\(record.title)” (\(record.turns) turns)")
         } else {
@@ -170,7 +195,7 @@ struct Chat: AsyncParsableCommand {
                 cwd = URL(fileURLWithPath: w.path)
                 print("worktree \(worktree) at \(w.path)")
             }
-            agent = try await AgentSession(spec: try model.spec(), workspace: ws, cwd: cwd, worktree: worktree, sink: Printer.print)
+            agent = try await AgentSession(spec: try model.spec(), workspace: ws, cwd: cwd, worktree: worktree, mcp: mcp, sink: Printer.print)
         }
         let spec = agent.spec, dir = agent.cwd
         print("mlex · \(spec) · \(dir) · effort \(effort.rawValue) · session \(agent.record.id.prefix(8))")
@@ -182,7 +207,7 @@ struct Chat: AsyncParsableCommand {
                 do {
                     let newSpec = try ModelSpec(parsing: v)
                     try agent.save()
-                    agent = try await AgentSession(record: agent.record, spec: newSpec, sink: Printer.print)
+                    agent = try await AgentSession(record: agent.record, spec: newSpec, mcp: mcp, sink: Printer.print)
                     print("model: \(newSpec) · footprint \(SystemMemory.format(SystemMemory.footprint()))")
                 } catch { print("error: \(error)") }
                 continue
@@ -207,6 +232,7 @@ struct Chat: AsyncParsableCommand {
             do { try await agent.run(line, effort: effort); print() }
             catch { print("\nerror: \(error)") }
         }
+        await mcp.disconnectAll()
     }
 }
 
