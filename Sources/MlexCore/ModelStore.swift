@@ -12,6 +12,10 @@ public actor ModelStore {
 
     public let root: URL
     private var loaded: [String: MLXLanguageModel] = [:]
+    /// The one MLX model whose weights are resident. Selecting another evicts it.
+    public private(set) var residentID: String?
+    /// Sent when residency changes, so UIs can update without polling.
+    public var onResidentChange: (@Sendable (String?) -> Void)?
 
     public init(root: URL? = nil) {
         self.root = root ?? URL(fileURLWithPath: NSHomeDirectory()).appending(path: ".cache/mlex/models")
@@ -77,25 +81,47 @@ public actor ModelStore {
         return dest
     }
 
-    public func remove(_ id: String) throws {
+    public func remove(_ id: String) async throws {
+        if residentID == id { await unloadResident() }
         try FileManager.default.removeItem(at: directory(for: id))
         loaded[id] = nil
     }
 
-    /// A `LanguageModel` for an installed MLX model. Instances are cached; the weights are
-    /// loaded lazily by the framework on first use and kept warm by MLXLanguageModel's cache.
+    /// A `LanguageModel` for an installed MLX model, with its weights loaded. Only one MLX
+    /// model is kept resident: asking for a different one evicts the previous model first.
     /// `.reasoning` is always declared so thinking can be switched per request via `Effort`.
-    public func languageModel(for id: String) throws -> MLXLanguageModel {
+    public func languageModel(for id: String) async throws -> MLXLanguageModel {
         guard isInstalled(id) else { throw MlexError.notInstalled(id) }
-        if let m = loaded[id] { return m }
-        let dir = directory(for: id)
-        let model = MLXLanguageModel(
-            configuration: ModelConfiguration(directory: dir),
-            capabilities: [.guidedGeneration, .toolCalling, .reasoning],
-            weightsLocation: { _ in dir },
-            load: { _, _ in try await loadModelContainer(from: dir, using: #huggingFaceTokenizerLoader()) })
-        loaded[id] = model
+        if residentID != id { await unloadResident() }
+        let model: MLXLanguageModel
+        if let m = loaded[id] { model = m } else {
+            let dir = directory(for: id)
+            model = MLXLanguageModel(
+                configuration: ModelConfiguration(directory: dir),
+                capabilities: [.guidedGeneration, .toolCalling, .reasoning],
+                weightsLocation: { _ in dir },
+                load: { _, _ in try await loadModelContainer(from: dir, using: #huggingFaceTokenizerLoader()) })
+            loaded[id] = model
+        }
+        try await model.preload()
+        residentID = id
+        onResidentChange?(id)
         return model
+    }
+
+    /// Free the resident model's weights. The next use reloads from disk.
+    public func unloadResident() async {
+        guard let id = residentID else { return }
+        await loaded[id]?.evict()
+        residentID = nil
+        onResidentChange?(nil)
+    }
+
+    /// How much memory loading `id` would need versus what the system can spare right now.
+    /// Weights map at roughly their on-disk size; working memory adds a margin.
+    public func headroom(for id: String) -> (needed: Int64, available: Int64) {
+        let needed = Int64(Double(Self.size(of: directory(for: id))) * 1.15)
+        return (needed, SystemMemory.available())
     }
 
     static func size(of dir: URL) -> Int64 {

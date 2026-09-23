@@ -36,6 +36,14 @@ effort level; on MLX models such as Qwen3 it switches thinking on or off, which 
 the difference between about 12 s and 50 s for a one-line answer.
 MLX weights live in `~/.cache/mlex/models/<org>/<name>`. Set `MLEX_USAGE=1` to print token usage.
 
+## Memory
+
+Pulling a model only writes to disk. Weights load when a model is selected and stay resident
+until you select another MLX model, which evicts the previous one, or click the memory chip
+icon next to the loaded model. Only one MLX model is ever resident; the Apple on-device model is
+managed by the system. Before loading, mlex compares the model's size with available memory and
+warns when it won't fit. In `chat`, `/model <spec>` switches models and keeps the transcript.
+
 ## App
 
 ```bash

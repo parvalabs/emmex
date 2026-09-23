@@ -5,7 +5,7 @@ import MlexCore
 
 /// One entry in the conversation timeline.
 struct TimelineItem: Identifiable {
-    enum Kind { case user, assistant, toolCall, toolResult, error }
+    enum Kind { case user, assistant, toolCall, toolResult, error, warning }
     let id = UUID()
     var kind: Kind
     var title: String = ""
@@ -21,6 +21,9 @@ final class AppModel {
     var pulls: [String: Double] = [:]          // id -> fraction
     var pullErrors: [String: String] = [:]
     private var pullTasks: [String: Task<Void, Never>] = [:]
+    var residentID: String?                   // MLX model whose weights are loaded
+    var loadingID: String?                    // MLX model currently loading
+    var footprint: Int64 = 0                  // this process's memory
 
     // Session
     var selected: ModelSpec = .system
@@ -37,6 +40,12 @@ final class AppModel {
     func refresh() async {
         backends = await Backends.status()
         installed = await ModelStore.shared.installed()
+        residentID = await ModelStore.shared.residentID
+        footprint = SystemMemory.footprint()
+    }
+
+    func unloadResident() {
+        Task { await ModelStore.shared.unloadResident(); await refresh() }
     }
 
     // MARK: models
@@ -91,6 +100,7 @@ final class AppModel {
     }
 
     private func makeAgent(transcript: Transcript?) async {
+        if case .mlx(let id) = selected { loadingID = id }
         do {
             agent = try await AgentSession(spec: selected, cwd: workspace.path, transcript: transcript) { [weak self] ev in
                 Task { @MainActor in self?.handle(ev) }
@@ -98,6 +108,9 @@ final class AppModel {
         } catch {
             timeline.append(.init(kind: .error, text: "\(error)"))
         }
+        loadingID = nil
+        residentID = await ModelStore.shared.residentID
+        footprint = SystemMemory.footprint()
     }
 
     func send() {
@@ -126,6 +139,7 @@ final class AppModel {
             case .toolCall(let n, let a): "toolCall \(n): \(a)"
             case .toolResult(let n, let o): "toolResult \(n): \(o.prefix(80))"
             case .finished(let u, let text): "finished in=\(u?.input.totalTokenCount ?? 0) out=\(u?.output.totalTokenCount ?? 0) text=\(text.prefix(80))"
+            case .warning(let w): "warning: \(w)"
             }
             FileHandle.standardError.write(Data("[mlex] \(line)\n".utf8))
         }
@@ -142,6 +156,9 @@ final class AppModel {
             timeline.append(.init(kind: .toolResult, title: name, text: output))
         case .finished(let usage, _):
             lastUsage = usage
+            footprint = SystemMemory.footprint()
+        case .warning(let w):
+            timeline.append(.init(kind: .warning, text: w))
         }
     }
 }

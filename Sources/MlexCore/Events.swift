@@ -7,6 +7,7 @@ public enum AgentEvent: Sendable {
     case toolCall(name: String, arguments: String)
     case toolResult(name: String, output: String)
     case finished(usage: LanguageModelSession.Usage?, text: String)
+    case warning(String)
 }
 
 public typealias EventSink = @Sendable (AgentEvent) -> Void

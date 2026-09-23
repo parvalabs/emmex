@@ -39,6 +39,14 @@ struct Sidebar: View {
                             Text(b.detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                         }
                         Spacer()
+                        if case .mlx(let id)? = spec {
+                            if model.loadingID == id {
+                                ProgressView().controlSize(.mini).help("Loading weights…")
+                            } else if model.residentID == id {
+                                Button { model.unloadResident() } label: { Image(systemName: "memorychip.fill") }
+                                    .buttonStyle(.plain).foregroundStyle(.tint).help("Loaded in memory. Click to unload.")
+                            }
+                        }
                         if spec == model.selected { Image(systemName: "checkmark").foregroundStyle(.tint) }
                     }
                     .contentShape(Rectangle())
@@ -70,6 +78,15 @@ struct Sidebar: View {
             }
         }
         .listStyle(.sidebar)
+        .safeAreaInset(edge: .bottom) {
+            HStack {
+                Image(systemName: "memorychip").foregroundStyle(.secondary)
+                Text("App \(SystemMemory.format(model.footprint)) · free \(SystemMemory.format(SystemMemory.available()))")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(8).background(.bar)
+        }
         .toolbar {
             Button { Task { await model.refresh() } } label: { Image(systemName: "arrow.clockwise") }
         }
@@ -158,6 +175,8 @@ struct TimelineRow: View {
             }
         case .error:
             Label(item.text, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+        case .warning:
+            Label(item.text, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).font(.caption)
         }
     }
 }

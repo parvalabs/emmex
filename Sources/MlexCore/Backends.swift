@@ -35,7 +35,8 @@ public enum Backends {
     /// Build a session for the spec. Kept as a factory because the session initializer is
     /// generic over the model type, so the branch has to happen at the call site.
     public static func makeSession(_ spec: ModelSpec, tools: [any Tool], instructions: String?,
-                                   transcript: Transcript? = nil) async throws -> LanguageModelSession {
+                                   transcript: Transcript? = nil,
+                                   onWarning: (@Sendable (String) -> Void)? = nil) async throws -> LanguageModelSession {
         switch spec {
         case .system:
             guard case .available = SystemLanguageModel.default.availability else {
@@ -63,6 +64,10 @@ public enum Backends {
             if let t = transcript { return LanguageModelSession(model: m, tools: tools, transcript: t) }
             return LanguageModelSession(model: m, tools: tools, instructions: instructions)
         case .mlx(let id):
+            let (needed, available) = await ModelStore.shared.headroom(for: id)
+            if needed > available {
+                onWarning?("\(id) needs about \(SystemMemory.format(needed)) but only \(SystemMemory.format(available)) is available; expect swapping")
+            }
             let m = try await ModelStore.shared.languageModel(for: id)
             if let t = transcript { return LanguageModelSession(model: m, tools: tools, transcript: t) }
             return LanguageModelSession(model: m, tools: tools, instructions: instructions)

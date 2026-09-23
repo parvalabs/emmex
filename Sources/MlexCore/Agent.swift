@@ -23,7 +23,8 @@ public final class AgentSession: @unchecked Sendable {
         let ctx = ToolContext(cwd: cwd, report: sink)
         self.session = try await Backends.makeSession(
             spec, tools: Tools.standard(ctx),
-            instructions: instructions ?? Self.defaultInstructions, transcript: transcript)
+            instructions: instructions ?? Self.defaultInstructions, transcript: transcript,
+            onWarning: { sink(.warning($0)) })
     }
 
     public var transcript: Transcript { session.transcript }

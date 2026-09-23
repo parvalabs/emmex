@@ -83,7 +83,7 @@ struct Run: AsyncParsableCommand {
 }
 
 struct Chat: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(abstract: "Interactive session. Empty line or /quit exits. /save <file> saves the transcript.")
+    static let configuration = CommandConfiguration(abstract: "Interactive session. Empty line or /quit exits. /model <spec> switches model (transcript kept), /effort <level>, /save <file>.")
     @OptionGroup var model: ModelOption
     @Option(name: .long, help: "Working directory for tools (default: current).") var cwd: String?
     @Option(name: .long, help: "Resume from a saved transcript JSON.") var resume: String?
@@ -92,12 +92,21 @@ struct Chat: AsyncParsableCommand {
         let spec = try model.spec()
         let dir = cwd ?? FileManager.default.currentDirectoryPath
         let transcript = try resume.map { try AgentSession.loadTranscript(from: URL(fileURLWithPath: $0)) }
-        let agent = try await AgentSession(spec: spec, cwd: dir, transcript: transcript, sink: Printer.print)
+        var agent = try await AgentSession(spec: spec, cwd: dir, transcript: transcript, sink: Printer.print)
         var effort = try model.effortLevel()
         print("mlex · \(spec) · \(dir) · effort \(effort.rawValue) (/effort <level> to change)")
         while true {
             FileHandle.standardOutput.write(Data("\n> ".utf8))
             guard let line = readLine(), !line.isEmpty, line != "/quit", line != "/exit" else { break }
+            if line.hasPrefix("/model") {
+                let v = line.dropFirst(6).trimmingCharacters(in: .whitespaces)
+                do {
+                    let newSpec = try ModelSpec(parsing: v)
+                    agent = try await AgentSession(spec: newSpec, cwd: dir, transcript: agent.transcript, sink: Printer.print)
+                    print("model: \(newSpec) · footprint \(SystemMemory.format(SystemMemory.footprint()))")
+                } catch { print("error: \(error)") }
+                continue
+            }
             if line.hasPrefix("/effort") {
                 let v = line.dropFirst(7).trimmingCharacters(in: .whitespaces)
                 if let e = Effort(rawValue: v) { effort = e; print("effort: \(e.rawValue)") } else { print("effort: off | low | medium | high") }
@@ -127,8 +136,10 @@ enum Printer {
             FileHandle.standardOutput.write(Data("    \(firstLines)\(out.count > 400 ? "\n    …" : "")\n".utf8)); lineStart = true
         case .finished(let usage, _):
             if let u = usage, ProcessInfo.processInfo.environment["MLEX_USAGE"] != nil {
-                FileHandle.standardOutput.write(Data("\n  [in=\(u.input.totalTokenCount) cached=\(u.input.cachedTokenCount) out=\(u.output.totalTokenCount)]".utf8))
+                FileHandle.standardOutput.write(Data("\n  [in=\(u.input.totalTokenCount) cached=\(u.input.cachedTokenCount) out=\(u.output.totalTokenCount) footprint=\(SystemMemory.format(SystemMemory.footprint()))]".utf8))
             }
+        case .warning(let w):
+            FileHandle.standardError.write(Data("warning: \(w)\n".utf8))
         }
     }
 }
