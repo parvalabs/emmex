@@ -1,6 +1,7 @@
 import Foundation
 import FoundationModels
 import ClaudeForFoundationModels
+import FoundationModelsUtilities
 
 /// Turns a `ModelSpec` into something a `LanguageModelSession` can run on, plus availability info.
 public enum Backends {
@@ -23,7 +24,17 @@ public enum Backends {
                          detail: Secrets.anthropicKey() != nil ? "key found" : "no API key"))
         out.append(.init(spec: "claude:haiku", available: Secrets.anthropicKey() != nil,
                          detail: Secrets.anthropicKey() != nil ? "Haiku 4.5, the cheap tier" : "no API key"))
-        let r = Settings.load().routes
+        let settings = Settings.load()
+        for (name, p) in settings.allProviders.sorted(by: { $0.key < $1.key }) {
+            let key = Secrets.providerKey(p)
+            let ok = p.requiresKey == false || key != nil
+            let models = (p.models ?? []).isEmpty ? ["<model>"] : p.models!
+            for m in models {
+                out.append(.init(spec: "\(name):\(m)", available: ok,
+                                 detail: ok ? "\(p.url)" : "no key: set \(p.env ?? "-") or Keychain service \(p.keychain ?? "-")"))
+            }
+        }
+        let r = settings.routes
         out.insert(.init(spec: "auto", available: true,
                          detail: "routes each message: local \(r.local) · cheap \(r.cheap) · frontier \(r.frontier)"), at: 0)
         for m in await ModelStore.shared.installed() {
@@ -73,6 +84,15 @@ public enum Backends {
             // Sessions on auto start on the local tier; AgentSession re-routes per message.
             let resolver = await TierResolver.current()
             return try await makeSession(resolver.spec(for: .local), tools: tools, instructions: instructions, transcript: transcript, onWarning: onWarning)
+        case .provider(let name, let modelID):
+            guard let p = Settings.load().allProviders[name] else { throw MlexError.badModelSpec("\(name):\(modelID)") }
+            guard let url = URL(string: p.url) else { throw MlexError.badModelSpec("provider \(name) url \(p.url)") }
+            var headers = p.headers ?? [:]
+            if let key = Secrets.providerKey(p) { headers["Authorization"] = "Bearer \(key)" }
+            else if p.requiresKey != false { throw MlexError.modelUnavailable("no API key for \(name): set \(p.env ?? "an env var") or Keychain service \(p.keychain ?? "-")") }
+            let m = ChatCompletionsLanguageModel(name: modelID, url: url, additionalHeaders: headers, supportsGuidedGeneration: p.guided ?? true)
+            if let t = transcript { return LanguageModelSession(model: m, tools: tools, transcript: t) }
+            return LanguageModelSession(model: m, tools: tools, instructions: instructions)
         case .mlx(let id):
             let (needed, available) = await ModelStore.shared.headroom(for: id)
             if needed > available {

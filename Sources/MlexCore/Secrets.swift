@@ -7,6 +7,13 @@ public enum Secrets {
         return keychain(service: "mlex-anthropic")
     }
 
+    /// API key for a configured provider: env var first, then Keychain.
+    public static func providerKey(_ p: Settings.Provider) -> String? {
+        if let e = p.env, let v = ProcessInfo.processInfo.environment[e], !v.isEmpty { return v }
+        if let k = p.keychain, let v = keychain(service: k) { return v }
+        return nil
+    }
+
     static func keychain(service: String) -> String? {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/security")

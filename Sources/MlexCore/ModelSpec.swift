@@ -9,6 +9,8 @@ public enum ModelSpec: Sendable, Hashable, CustomStringConvertible {
     case mlx(String)
     /// Route every message to a tier (local / cheap / frontier) chosen by the router.
     case auto
+    /// Any OpenAI-compatible provider configured in settings: `<provider>:<model>`.
+    case provider(String, String)
 
     public static let `default`: ModelSpec = .system
 
@@ -20,6 +22,7 @@ public enum ModelSpec: Sendable, Hashable, CustomStringConvertible {
         case ("pcc", nil), ("cloud", nil): self = .pcc
         case ("claude", let m): self = .claude(m ?? "sonnet5")
         case ("mlx", let id?): self = .mlx(id)
+        case (let name, let model?) where Settings.load().allProviders[name] != nil && !model.isEmpty: self = .provider(name, model)
         default: throw MlexError.badModelSpec(s)
         }
     }
@@ -31,6 +34,7 @@ public enum ModelSpec: Sendable, Hashable, CustomStringConvertible {
         case .claude(let m): "claude:\(m)"
         case .mlx(let id): "mlx:\(id)"
         case .auto: "auto"
+        case .provider(let p, let m): "\(p):\(m)"
         }
     }
 }
@@ -43,7 +47,7 @@ public enum MlexError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .badModelSpec(let s): "unknown model spec '\(s)' (use auto | system | pcc | claude:<name> | mlx:<hf-id>)"
+        case .badModelSpec(let s): "unknown model spec '\(s)' (use auto | system | pcc | claude:<name> | mlx:<hf-id> | <provider>:<model>, providers: \(Settings.load().allProviders.keys.sorted().joined(separator: ", ")))"
         case .modelUnavailable(let why): "model unavailable: \(why)"
         case .missingAPIKey: "no Anthropic API key: set ANTHROPIC_API_KEY or add a Keychain item with service 'mlex-anthropic'"
         case .notInstalled(let id): "MLX model '\(id)' is not installed; run: mlex models pull \(id)"

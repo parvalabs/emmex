@@ -22,6 +22,7 @@ public enum Compactor {
         case .claude: return 200_000
         case .mlx(let id): return await ModelStore.shared.contextLength(for: id)
         case .auto: return SystemLanguageModel.default.contextSize
+        case .provider(let name, _): return Settings.load().allProviders[name]?.context ?? 128_000
         }
     }
 

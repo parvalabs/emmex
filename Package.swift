@@ -17,6 +17,7 @@ let package = Package(
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1"),
+        .package(url: "https://github.com/apple/foundation-models-utilities", from: "1.0.0-beta1"),
     ],
     targets: [
         .target(name: "MlexCore", dependencies: [
@@ -27,6 +28,7 @@ let package = Package(
             .product(name: "HuggingFace", package: "swift-huggingface"),
             .product(name: "Tokenizers", package: "swift-transformers"),
             .product(name: "MCP", package: "swift-sdk"),
+            .product(name: "FoundationModelsUtilities", package: "foundation-models-utilities"),
         ]),
         .target(name: "MlexServer", dependencies: ["MlexCore"], resources: [.copy("Resources/web")]),
         .executableTarget(name: "mlex", dependencies: [

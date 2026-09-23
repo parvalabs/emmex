@@ -69,7 +69,20 @@ In chat: `/model <spec>`, `/effort <level>`, `/title <text>`, `/compact`, `/cont
 `/memory`, `/fork [N]`, `/export [file]`, `/skills`, `/prompts`, `/tools`, `/sessions`,
 `/skill:<name> [args]`, `/<template> [args]`.
 
-Model specs: `auto`, `system`, `pcc`, `claude:<sonnet5|haiku|opus5_5|opus4_8|id>`, `mlx:<org/name>`.
+Model specs: `auto`, `system`, `pcc`, `claude:<sonnet5|haiku|opus5_5|opus4_8|id>`, `mlx:<org/name>`,
+and `<provider>:<model>` for any OpenAI-compatible chat-completions endpoint. Built-in providers:
+`openai` (key in Keychain `mlex-openai` or `OPENAI_API_KEY`), `bedrock` (Bedrock API key in
+`mlex-bedrock` or `AWS_BEARER_TOKEN_BEDROCK`; us-east-1 by default; only models that support
+Bedrock's Chat Completions API, e.g. `openai.gpt-oss-120b-1:0`, not Claude or Nova), and
+`ollama` (local, no key). Add or override providers in `~/.mlex/settings.json`:
+
+```json
+{ "providers": { "groq": { "url": "https://api.groq.com/openai/v1", "keychain": "mlex-groq",
+                            "models": ["llama-3.3-70b-versatile"], "guided": false, "context": 128000 } } }
+```
+
+Fields: `url`, `keychain` or `env` for the key, optional `headers`, `models` for the picker,
+`guided` (structured output support, default true), `context`, `requiresKey` (false for local servers).
 MLX weights live in `~/.cache/mlex/models/<org>/<name>`. Set `MLEX_USAGE=1` to print token usage.
 
 ## Memory

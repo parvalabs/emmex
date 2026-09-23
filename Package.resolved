@@ -1,5 +1,5 @@
 {
-  "originHash" : "cba49794b057f6788fe8b17dee049d4f8a6029560c6bc76ce4d37fd2f46f613e",
+  "originHash" : "d84c20756fca54f9e592aa2e44ecc26dc6b5901492c6f66720474f539b3eaf3c",
   "pins" : [
     {
       "identity" : "claudeforfoundationmodels",
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "86b5096ac59ab46e66bd1f6377c604bc1dab0bc2",
         "version" : "1.5.1"
+      }
+    },
+    {
+      "identity" : "foundation-models-utilities",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/foundation-models-utilities",
+      "state" : {
+        "revision" : "cc3820def1fe016bc6cd49d958cd2f2a29be76a8",
+        "version" : "1.1.0-beta1"
       }
     },
     {

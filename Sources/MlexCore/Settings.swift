@@ -6,17 +6,71 @@ public struct Settings: Codable, Sendable {
         public var local: String = "system"
         public var cheap: String = "claude:haiku"
         public var frontier: String = "claude:sonnet5"
+        public init() {}
+        enum CodingKeys: String, CodingKey { case local, cheap, frontier }
+        public init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            local = try c.decodeIfPresent(String.self, forKey: .local) ?? "system"
+            cheap = try c.decodeIfPresent(String.self, forKey: .cheap) ?? "claude:haiku"
+            frontier = try c.decodeIfPresent(String.self, forKey: .frontier) ?? "claude:sonnet5"
+        }
     }
     public var routes = Routes()
+    public init() {}
+
+    // Every key is optional in the file: a partial settings.json keeps the defaults for the rest.
+    enum CodingKeys: String, CodingKey { case routes, router, memory, providers }
+    public init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        routes = try c.decodeIfPresent(Routes.self, forKey: .routes) ?? Routes()
+        router = try c.decodeIfPresent(String.self, forKey: .router) ?? "ondevice"
+        memory = try c.decodeIfPresent(Bool.self, forKey: .memory) ?? true
+        providers = try c.decodeIfPresent([String: Provider].self, forKey: .providers)
+    }
     /// "ondevice" (default) or "jev" (TypeSafe Jev; needs a key in Keychain service `mlex-jev` or JEV_API_KEY).
     public var router: String = "ondevice"
     /// Remember facts from conversations and inject relevant ones.
     public var memory: Bool = true
 
+    /// OpenAI-compatible chat-completions providers, keyed by the name used in specs (`<name>:<model>`).
+    public struct Provider: Codable, Sendable, Hashable {
+        public var url: String                       // base URL, e.g. https://api.openai.com/v1
+        public var keychain: String?                 // Keychain service holding the API key
+        public var env: String?                      // env var holding the API key
+        public var headers: [String: String]?        // extra headers
+        public var models: [String]?                 // suggested model ids for the picker
+        public var guided: Bool?                     // supports response_format json_schema (default true)
+        public var context: Int?                     // context window in tokens (default 128k)
+        public var requiresKey: Bool?                // false for local servers (default true)
+        public init(url: String, keychain: String? = nil, env: String? = nil, headers: [String: String]? = nil, models: [String]? = nil, guided: Bool? = nil, context: Int? = nil, requiresKey: Bool? = nil) {
+            self.url = url; self.keychain = keychain; self.env = env; self.headers = headers; self.models = models; self.guided = guided; self.context = context; self.requiresKey = requiresKey
+        }
+    }
+    public var providers: [String: Provider]? = nil
+
+    /// Built-in providers, overridable per name in settings.json.
+    public static let defaultProviders: [String: Provider] = [
+        "openai": Provider(url: "https://api.openai.com/v1", keychain: "mlex-openai", env: "OPENAI_API_KEY",
+                           models: ["gpt-5", "gpt-5.5", "gpt-5-mini"], context: 400_000),
+        "bedrock": Provider(url: "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1", keychain: "mlex-bedrock", env: "AWS_BEARER_TOKEN_BEDROCK",
+                            models: ["openai.gpt-oss-120b-1:0", "openai.gpt-oss-20b-1:0"], context: 128_000),
+        "ollama": Provider(url: "http://localhost:11434/v1", models: [], guided: false, context: 32_000, requiresKey: false),
+    ]
+
+    public var allProviders: [String: Provider] {
+        var all = Self.defaultProviders
+        for (k, v) in providers ?? [:] { all[k] = v }
+        return all
+    }
+
     public static func load() -> Settings {
         let url = Paths.userConfig.appending(path: "settings.json")
-        guard let data = try? Data(contentsOf: url), let s = try? JSONDecoder().decode(Settings.self, from: data) else { return Settings() }
-        return s
+        guard let data = try? Data(contentsOf: url) else { return Settings() }
+        do { return try JSONDecoder().decode(Settings.self, from: data) }
+        catch {
+            FileHandle.standardError.write(Data("[mlex] settings.json ignored: \(error)\n".utf8))
+            return Settings()
+        }
     }
 
     public func save() throws {
