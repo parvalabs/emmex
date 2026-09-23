@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS("27.0")],
     products: [
         .library(name: "MlexCore", targets: ["MlexCore"]),
+        .library(name: "MlexServer", targets: ["MlexServer"]),
         .executable(name: "mlex", targets: ["mlex"]),
         .executable(name: "MlexApp", targets: ["MlexApp"]),
     ],
@@ -27,11 +28,12 @@ let package = Package(
             .product(name: "Tokenizers", package: "swift-transformers"),
             .product(name: "MCP", package: "swift-sdk"),
         ]),
+        .target(name: "MlexServer", dependencies: ["MlexCore"], resources: [.copy("Resources/web")]),
         .executableTarget(name: "mlex", dependencies: [
-            "MlexCore",
+            "MlexCore", "MlexServer",
             .product(name: "ArgumentParser", package: "swift-argument-parser"),
         ]),
-        .executableTarget(name: "MlexApp", dependencies: ["MlexCore"]),
+        .executableTarget(name: "MlexApp", dependencies: ["MlexCore", "MlexServer"]),
         .executableTarget(name: "spike-transcript", dependencies: ["MlexCore"]),
         .executableTarget(name: "spike-claude", dependencies: [
             "MlexCore",

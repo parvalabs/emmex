@@ -45,6 +45,22 @@ public struct SessionSummary: Identifiable, Sendable, Hashable {
 
 /// Sessions live at Application Support/mlex/sessions/<workspace-key>/<id>.json.
 public enum SessionStore {
+    /// Titles saved from a memory-prefixed prompt (an earlier bug) are re-derived from the
+    /// transcript's first user prompt on read, and the file is repaired.
+    static func cleanTitle(_ r: SessionRecord) -> String {
+        guard r.title.hasPrefix("Relevant memory:") else { return r.title }
+        for e in r.transcript {
+            if case .prompt(let p) = e {
+                var text = p.segments.compactMap { if case .text(let t) = $0 { t.content } else { nil } }.joined()
+                if text.hasPrefix("Relevant memory:"), let cut = text.range(of: "\n\n") { text = String(text[cut.upperBound...]) }
+                let one = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
+                let title = one.count > 60 ? String(one.prefix(57)) + "…" : one
+                var fixed = r; fixed.title = title; try? save(fixed)
+                return title
+            }
+        }
+        return r.title
+    }
     public static let encoder: JSONEncoder = { let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601; return e }()
     public static let decoder: JSONDecoder = { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d }()
 
@@ -92,7 +108,7 @@ public enum SessionStore {
         return files.filter { $0.hasSuffix(".json") }.compactMap { f -> SessionSummary? in
             guard let data = try? Data(contentsOf: dir.appending(path: f)),
                   let r = try? decoder.decode(SessionRecord.self, from: data) else { return nil }
-            return SessionSummary(id: r.id, title: r.title, model: r.model, worktree: r.worktree, updatedAt: r.updatedAt, turns: r.turns)
+            return SessionSummary(id: r.id, title: Self.cleanTitle(r), model: r.model, worktree: r.worktree, updatedAt: r.updatedAt, turns: r.turns)
         }.sorted { $0.updatedAt > $1.updatedAt }
     }
 }

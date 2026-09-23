@@ -1,52 +1,96 @@
 import SwiftUI
+import AppKit
+import WebKit
 import MlexCore
+import MlexServer
 
+/// The Mac app is a thin native shell: a window hosting the web UI served from localhost by
+/// the same server the `mlex serve` command runs. Native menus map to web actions.
 @main
 struct MlexApp: App {
-    @State private var model = AppModel()
+    @State private var host = WebHost()
 
     var body: some Scene {
         WindowGroup("mlex") {
-            RootView()
-                .environment(model)
+            WebView(host: host)
                 .frame(minWidth: 960, minHeight: 620)
-                .task {
-                    let env = ProcessInfo.processInfo.environment
-                    await model.start(autoOpen: env["MLEX_WORKSPACE"] == nil)
-                    if let ws = env["MLEX_WORKSPACE"] { model.openWorkspace(URL(fileURLWithPath: ws)) }
-                    if let m = env["MLEX_MODEL"], let spec = try? ModelSpec(parsing: m) { model.select(spec) }
-                    if let p = env["MLEX_AUTOPROMPT"] { model.input = p; model.send() }
-                    if let seq = env["MLEX_AUTOSWITCH"] {
-                        for s in seq.split(separator: ",") {
-                            try? await Task.sleep(for: .milliseconds(300))
-                            if let spec = try? ModelSpec(parsing: String(s)) { model.select(spec) }
-                        }
-                    }
-                }
+                .ignoresSafeArea()
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(after: .newItem) {
-                Button("New Session") { model.newSession() }.keyboardShortcut("n")
-                Button("Open Folder…") { model.chooseWorkspace() }.keyboardShortcut("o")
-                Button("Compact Context") { model.compact() }.keyboardShortcut("k", modifiers: [.command, .shift])
-                Button("Export Session…") { model.exportSession() }.keyboardShortcut("e", modifiers: [.command, .shift])
+                Button("New Session") { host.action(["type": "new_session"]) }.keyboardShortcut("n")
+                Button("Open Folder…") { host.action(["type": "choose_workspace"]) }.keyboardShortcut("o")
+                Button("Compact Context") { host.action(["type": "compact"]) }.keyboardShortcut("k", modifiers: [.command, .shift])
+                Button("Export Session…") { host.exportSession() }.keyboardShortcut("e", modifiers: [.command, .shift])
+                Divider()
+                Button("Open in Browser") { if let u = host.app?.url { NSWorkspace.shared.open(u) } }
             }
         }
     }
 }
 
-struct RootView: View {
-    @Environment(AppModel.self) private var model
-    var body: some View {
-        @Bindable var model = model
-        HStack(spacing: 0) {
-            SidebarView()
-            Divider().overlay(Theme.hairline)
-            ChatView()
+@MainActor @Observable
+final class WebHost {
+    var app: WebApp?
+    var url: URL?
+    private let controller = AppController()
+
+    init() { Task { @MainActor in await self.start() } }
+
+    private func log(_ s: String) { if ProcessInfo.processInfo.environment["MLEX_DEBUG"] != nil { FileHandle.standardError.write(Data("[mlex] \(s)\n".utf8)) } }
+
+    func start() async {
+        guard app == nil else { return }
+        log("start")
+        do {
+            controller.canUseNativePanels = true
+            let env = ProcessInfo.processInfo.environment
+            let port = UInt16(env["MLEX_PORT"] ?? "") ?? 0
+            let web = try WebApp(port: port, webRoot: env["MLEX_WEB_ROOT"].map { URL(fileURLWithPath: $0) }, controller: controller)
+            log("listening…")
+            try await web.start()
+            log("server ready on \(web.url)")
+            app = web; url = web.url
+            await controller.start(autoOpen: env["MLEX_WORKSPACE"] == nil)
+            if let ws = env["MLEX_WORKSPACE"] { controller.openWorkspace(URL(fileURLWithPath: ws)) }
+            if let p = env["MLEX_AUTOPROMPT"] { controller.send(p) }
+            if env["MLEX_DEBUG"] != nil { FileHandle.standardError.write(Data("[mlex] web ui at \(web.url)\n".utf8)) }
+        } catch {
+            FileHandle.standardError.write(Data("[mlex] web server failed: \(error)\n".utf8))
+            NSAlert(error: error).runModal()
         }
-        .sheet(isPresented: $model.showModels) { ModelsSheet().environment(model) }
-        .sheet(isPresented: $model.showWorkspaceInfo) { WorkspaceInfoSheet().environment(model) }
-        .sheet(item: $model.renaming) { s in RenameSheet(session: s).environment(model) }
     }
+
+    func action(_ a: [String: Any]) { Task { _ = await controller.handle(a) } }
+
+    func exportSession() {
+        Task {
+            let r = await controller.handle(["type": "export"])
+            guard let html = r["html"] as? String else { return }
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = ((r["title"] as? String) ?? "session").prefix(40).replacingOccurrences(of: "/", with: "-") + ".html"
+            panel.allowedContentTypes = [.html]
+            if panel.runModal() == .OK, let u = panel.url { try? html.write(to: u, atomically: true, encoding: .utf8) }
+        }
+    }
+}
+
+struct WebView: NSViewRepresentable {
+    let host: WebHost
+
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.preferences.setValue(true, forKey: "developerExtrasEnabled")   // Inspect Element in the context menu
+        let view = WKWebView(frame: .zero, configuration: config)
+        view.setValue(false, forKey: "drawsBackground")
+        view.underPageBackgroundColor = .windowBackgroundColor
+        return view
+    }
+
+    func updateNSView(_ view: WKWebView, context: Context) {
+        if let url = host.url, view.url == nil { view.load(URLRequest(url: url)) }
+    }
+
+    static func dismantleNSView(_ view: WKWebView, coordinator: ()) {}
 }

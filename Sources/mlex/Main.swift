@@ -2,6 +2,7 @@ import ArgumentParser
 import Foundation
 import FoundationModels
 import MlexCore
+import MlexServer
 
 @main struct Mlex: AsyncParsableCommand {
     static func main() async {
@@ -10,7 +11,7 @@ import MlexCore
     }
     static let configuration = CommandConfiguration(
         abstract: "mlex: local-first agent on Apple Foundation Models, MLX models, and Claude.",
-        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self, MemoryCmd.self],
+        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self, MemoryCmd.self, Serve.self],
         defaultSubcommand: Chat.self)
 }
 
@@ -174,6 +175,30 @@ struct WorktreesCmd: AsyncParsableCommand {
             try Worktrees.remove(repo: ws, path: w.path, force: force)
             print("removed \(w.path)")
         }
+    }
+}
+
+// MARK: serve
+
+struct Serve: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "Serve the web UI on localhost (the same UI the Mac app shows).")
+    @Option(name: .long, help: "Port (default 8765; 0 picks a free one).") var port: UInt16 = 8765
+    @Option(name: .long, help: "Workspace to open (default: most recent).") var workspace: String?
+    @Option(name: .long, help: "Serve web assets from this folder instead of the bundled ones (live editing).") var webRoot: String?
+    @Flag(name: .long, help: "Open in the default browser.") var open = false
+
+    func run() async throws {
+        let app = try await MainActor.run { try WebApp(port: port, webRoot: webRoot.map { URL(fileURLWithPath: $0) }) }
+        try await app.start()
+        print("mlex web UI: \(app.url)")
+        await MainActor.run {
+            Task { @MainActor in
+                await app.controller.start(autoOpen: workspace == nil)
+                if let ws = workspace { app.controller.openWorkspace(URL(fileURLWithPath: ws)) }
+            }
+        }
+        if open { _ = try? Process.run(URL(fileURLWithPath: "/usr/bin/open"), arguments: [app.url.absoluteString]) }
+        while true { try await Task.sleep(for: .seconds(3600)) }
     }
 }
 

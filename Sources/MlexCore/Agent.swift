@@ -162,6 +162,7 @@ public final class AgentSession: @unchecked Sendable {
             try await compact()
             text = try await runOnce(sent, effort: effort)
         }
+        if record.turns == 1, record.title == "New session" { record.title = Self.title(from: prompt); if autosave { try? save() } }
         await remember(prompt: prompt, response: text)
         return text
     }
@@ -206,9 +207,6 @@ public final class AgentSession: @unchecked Sendable {
         if let u = usage, u.input.totalTokenCount > 0 { lastInputTokens = u.input.totalTokenCount + u.output.totalTokenCount }
         sink(.finished(usage: usage, text: last))
         record.turns += 1
-        if record.turns == 1, record.title == "New session" {
-            record.title = Self.title(from: prompt)
-        }
         record.effort = effort
         if autosave { try? save() }
         return last

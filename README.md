@@ -73,18 +73,23 @@ icon next to the loaded model. Only one MLX model is ever resident; the Apple on
 managed by the system. Before loading, mlex compares the model's size with available memory and
 warns when it won't fit. In `chat`, `/model <spec>` switches models and keeps the transcript.
 
-## App
+## App and web UI
+
+The UI is HTML, CSS, and JS served by the app itself on localhost and shown in a `WKWebView`.
+The same UI runs in any browser for development:
 
 ```bash
-./scripts/bundle-app.sh debug      # builds MlexApp and wraps it into .build/Mlex.app (ad-hoc signed)
-open .build/Mlex.app
+./scripts/bundle-app.sh debug && open .build/Mlex.app      # the Mac app
+.build/debug/mlex serve --open                             # same UI at http://127.0.0.1:8765
+.build/debug/mlex serve --web-root Sources/MlexServer/Resources/web   # edit assets live
 ```
 
-Sidebar: workspace switcher with recents, sessions list, and a worktree option on new
-sessions. Top bar: session title, context usage (click to compact), effort, and a model
-picker. Chat renders markdown with code blocks and collapsible tool cards; `/` in the
-composer suggests skills and templates. Models and Tools sheets manage MLX pulls and show
-MCP servers, skills, and templates. Switching models keeps the conversation.
+Sidebar: workspace switcher with recents, new session (plain or on a worktree), sessions
+grouped by day. Top bar: session title (double-click to rename), worktree badge, context ring
+(click to compact). Composer: model and effort pickers, `/` suggestions for skills and templates,
+follow-up queue, stop. Models and Tools dialogs manage MLX pulls, MCP servers, skills,
+templates, and memory. Right-click a message to fork before it. The app adds native menus
+(New Session, Open Folder, Compact, Export, Open in Browser) and Inspect Element for debugging.
 Private Cloud Compute needs Apple's managed entitlement and a real signing identity; see
 `scripts/Mlex.entitlements`.
 
@@ -94,7 +99,8 @@ Private Cloud Compute needs Apple's managed entitlement and a real signing ident
 |---|---|
 | `Sources/MlexCore` | model specs and backends, MLX model store (pull, list, load), tools (bash, read, write, edit), agent session with streaming events and transcript persistence |
 | `Sources/mlex` | the CLI |
-| `Sources/MlexApp` | SwiftUI app: model picker, chat, tool timeline |
+| `Sources/MlexServer` | localhost HTTP + SSE server, view-independent `AppController`, and the web UI in `Resources/web` |
+| `Sources/MlexApp` | the Mac shell: a `WKWebView` window over the server, plus native menus |
 | `scripts/` | app bundling and entitlements |
 | `Sources/spike-*` | the three feasibility spikes, kept runnable |
 

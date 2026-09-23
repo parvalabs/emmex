@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mlex</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="drag-strip"></div>
+    <button id="workspace" class="ws" title="Switch workspace">
+      <span class="ws-icon">▣</span><span id="ws-name" class="ws-name">Open a folder</span><span class="ws-chev">⌄</span>
+    </button>
+    <div class="row">
+      <button id="new-session" class="new"><span class="ico">✎</span>New session<kbd>⌘N</kbd></button>
+      <button id="new-worktree" class="icon-btn" title="New session on a git worktree">⑂</button>
+    </div>
+    <div id="sessions" class="sessions"></div>
+    <div class="foot">
+      <button id="open-models" class="foot-btn">Models</button>
+      <button id="open-tools" class="foot-btn">Tools</button>
+      <span id="mem" class="mem"></span>
+    </div>
+  </aside>
+
+  <main id="main">
+    <header id="topbar">
+      <div class="title-wrap">
+        <span id="title" class="title" title="Double-click to rename"></span>
+        <span id="worktree" class="badge hidden"></span>
+      </div>
+      <button id="context" class="ctx hidden" title="Context used. Click to compact.">
+        <svg viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="6" class="ring-bg"/><circle id="ring" cx="8" cy="8" r="6" class="ring-fg"/></svg>
+        <span id="ctx-pct">0%</span>
+      </button>
+    </header>
+
+    <div id="scroll" class="scroll">
+      <div id="timeline" class="timeline"></div>
+    </div>
+
+    <div class="composer-wrap">
+      <div id="suggest" class="suggest hidden"></div>
+      <div id="queue" class="queue hidden"></div>
+      <div id="composer" class="composer">
+        <textarea id="input" rows="1" placeholder="How can I help?  Type / for skills and templates"></textarea>
+        <div class="bar">
+          <button id="model-btn" class="chip"><span id="model-label">system</span><span class="chev">⌄</span></button>
+          <button id="effort-btn" class="chip"><span class="brain">◐</span><span id="effort-label">Effort</span></button>
+          <span class="spacer"></span>
+          <button id="stop" class="round stop hidden" title="Stop (⌘.)">■</button>
+          <button id="send" class="round send" title="Send (⌘↩)" disabled>↑</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="menu" class="menu hidden"></div>
+<div id="modal" class="modal hidden"><div id="modal-card" class="modal-card"></div></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
