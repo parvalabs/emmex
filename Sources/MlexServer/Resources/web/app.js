@@ -150,6 +150,7 @@ function renderTimeline() {
   if (run) finishRun(run, S.busy);
   if (!S.busy) runs.forEach(finishTurn);
   panelUpdate();
+  if (!$('#tab-changes').classList.contains('hidden')) refreshGitDiff();
   if (S.busy) { const th = el('div', 'thinking'); th.append(el('span', 'dot'), el('span', '', 'Thinking…')); th.id = 'thinking'; t.append(th); }
   scrollBottom();
 }
@@ -193,7 +194,7 @@ function panelUpdate() {
 function openPanel(tab) { $('#panel').classList.remove('hidden'); $('#app').classList.add('with-panel'); if (tab) selectTab(tab); try { localStorage.setItem('mlex.panel', '1'); } catch {} }
 function closePanel() { $('#panel').classList.add('hidden'); $('#app').classList.remove('with-panel'); try { localStorage.setItem('mlex.panel', '0'); } catch {} }
 try { if (localStorage.getItem('mlex.panel') === '1') openPanel(); } catch {}
-function selectTab(tab) { document.querySelectorAll('.ptab').forEach(b => b.classList.toggle('on', b.dataset.tab === tab)); $('#tab-activity').classList.toggle('hidden', tab !== 'activity'); $('#tab-changes').classList.toggle('hidden', tab !== 'changes'); if (tab === 'changes') renderChanges(); }
+function selectTab(tab) { document.querySelectorAll('.ptab').forEach(b => b.classList.toggle('on', b.dataset.tab === tab)); $('#tab-activity').classList.toggle('hidden', tab !== 'activity'); $('#tab-changes').classList.toggle('hidden', tab !== 'changes'); if (tab === 'changes') { renderChanges(); refreshGitDiff(); } }
 document.querySelectorAll('.ptab').forEach(b => b.onclick = () => selectTab(b.dataset.tab));
 $('#panel-close').onclick = closePanel;
 $('#panel-btn').onclick = () => $('#panel').classList.contains('hidden') ? openPanel() : closePanel();
@@ -219,12 +220,47 @@ function renderChanges() {
     h.onclick = () => c.classList.toggle('open'); list.append(c);
   }
 }
-$('#changes-refresh').onclick = async () => {
-  const r = await act({ type: 'workspace_diff' }); const sec = $('#chg-git'); sec.classList.remove('hidden');
-  $('#chg-stat').textContent = (r.stat || '').trim() + ((r.untracked || '').trim() ? '\nuntracked:\n' + r.untracked.trim() : '') || 'clean';
-  const pre = $('#chg-diff'); pre.innerHTML = '';
-  for (const line of (r.diff || '').split('\n')) { const cls = line.startsWith('+') && !line.startsWith('+++') ? 'add' : line.startsWith('-') && !line.startsWith('---') ? 'del' : line.startsWith('@@') ? 'hunk' : ''; const d = el('div', cls, line); pre.append(d); }
-};
+/* Workspace diff: fetched quietly when the Changes tab is visible and after every turn; shown only when non-empty. */
+let gitDiffInFlight = false;
+function parseUnifiedDiff(text) {
+  const files = [];
+  for (const chunk of text.split(/^diff --git /m).slice(1)) {
+    const lines = chunk.split('\n'); const m = lines[0].match(/^a\/(.*?) b\/(.*)$/); const path = m ? m[2] : lines[0];
+    let i = 1; while (i < lines.length && !lines[i].startsWith('@@')) i++;
+    const body = lines.slice(i).filter((l, k, arr) => !(k === arr.length - 1 && l === ''));
+    files.push({ path, adds: body.filter(l => l[0] === '+').length, dels: body.filter(l => l[0] === '-').length, body, tag: /^new file/m.test(chunk) ? 'new' : /^deleted file/m.test(chunk) ? 'deleted' : '' });
+  }
+  return files;
+}
+async function refreshGitDiff() {
+  if (gitDiffInFlight || !S || !S.workspace) return; gitDiffInFlight = true;
+  try {
+    const r = await act({ type: 'workspace_diff' }); const sec = $('#chg-git'); const list = $('#chg-git-list'); list.innerHTML = '';
+    const files = r.isRepo ? parseUnifiedDiff(r.diff || '') : []; const untracked = r.isRepo ? (r.untracked || '').split('\n').filter(Boolean) : [];
+    const n = files.length + untracked.length; sec.classList.toggle('hidden', n === 0); $('#chg-git-count').textContent = n || '';
+    for (const f of files) {
+      const c = el('div', 'filechange'); const h = el('div', 'fh');
+      h.append(el('span', 'p', f.path)); if (f.tag) h.append(el('span', 'tag', f.tag)); h.append(el('span', 'plus', `+${f.adds}`), el('span', 'minus', `−${f.dels}`)); c.append(h);
+      const body = el('div', 'fb'); const pre = el('pre', 'gitdiff');
+      for (const line of f.body) pre.append(el('div', line[0] === '+' ? 'add' : line[0] === '-' ? 'del' : line.startsWith('@@') ? 'hunk' : '', line));
+      body.append(pre); c.append(body); h.onclick = () => c.classList.toggle('open'); list.append(c);
+    }
+    for (const u of untracked) { const c = el('div', 'filechange'); const h = el('div', 'fh'); h.append(el('span', 'p', u), el('span', 'tag', 'untracked')); c.append(h); list.append(c); }
+  } catch {} finally { gitDiffInFlight = false; }
+}
+
+/* Panel resize: drag the left edge; the width is remembered. */
+(() => {
+  const panel = $('#panel'); const grip = $('#panel-grip');
+  try { const w = parseInt(localStorage.getItem('mlex.panelW') || '', 10); if (w) panel.style.width = w + 'px'; } catch {}
+  grip.onmousedown = (e) => {
+    e.preventDefault(); const startX = e.clientX; const startW = panel.getBoundingClientRect().width; document.body.classList.add('resizing'); grip.classList.add('on');
+    const move = (ev) => { const w = Math.max(280, Math.min(window.innerWidth * 0.7, startW + (startX - ev.clientX))); panel.style.width = w + 'px'; };
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); document.body.classList.remove('resizing'); grip.classList.remove('on'); try { localStorage.setItem('mlex.panelW', String(Math.round(panel.getBoundingClientRect().width))); } catch {} };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  };
+})();
+
 function scrollBottom() { const s = $('#scroll'); s.scrollTop = s.scrollHeight; }
 
 function routeBadge(turn) {
@@ -436,7 +472,7 @@ function applyState(s) {
   const wasBusy = S && S.busy;
   S = s; renderSessions(); renderChrome(); renderPulls();
   if (structural) renderTimeline();
-  else if (wasBusy && !s.busy) { runs.forEach(finishTurn); panelUpdate(); }
+  else if (wasBusy && !s.busy) { runs.forEach(finishTurn); panelUpdate(); refreshGitDiff(); }
 }
 const es = new EventSource('/events');
 es.addEventListener('state', (e) => applyState(JSON.parse(e.data)));

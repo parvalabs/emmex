@@ -64,6 +64,7 @@
   </main>
 
   <aside id="panel" class="panel hidden">
+    <div id="panel-grip" class="grip" title="Drag to resize"></div>
     <div class="ptabs">
       <button class="ptab on" data-tab="activity">Activity</button>
       <button class="ptab" data-tab="changes">Changes</button>
@@ -75,8 +76,8 @@
       <div class="psec"><div class="psec-h"><button id="act-fin-toggle" class="fold">▶</button> Finished <span id="act-fin-count" class="cnt"></span></div><div id="act-finished" class="plist folded"></div></div>
     </div>
     <div id="tab-changes" class="pbody hidden">
-      <div class="psec"><div class="psec-h">Edited by this session <button id="changes-refresh" class="btn small-btn">git diff</button></div><div id="chg-list" class="plist"></div></div>
-      <div class="psec hidden" id="chg-git"><div class="psec-h">Workspace diff</div><pre id="chg-stat" class="stat"></pre><pre id="chg-diff" class="gitdiff"></pre></div>
+      <div class="psec"><div class="psec-h">Edited by this session</div><div id="chg-list" class="plist"></div></div>
+      <div class="psec hidden" id="chg-git"><div class="psec-h">Uncommitted in workspace <span id="chg-git-count" class="cnt"></span></div><div id="chg-git-list" class="plist"></div></div>
     </div>
   </aside>
 </div>

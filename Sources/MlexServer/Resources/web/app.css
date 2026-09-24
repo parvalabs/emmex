@@ -194,7 +194,10 @@ input.text:focus { border-color: var(--accent); }
 .edit .l.ctx { color: var(--faint); }
 
 /* ---------- activity / changes panel ---------- */
-.panel { width: 400px; flex: 0 0 400px; border-left: 1px solid var(--line); background: var(--sidebar); display: flex; flex-direction: column; min-width: 0; }
+.panel { width: 400px; flex: 0 0 auto; min-width: 280px; max-width: 70vw; border-left: 1px solid var(--line); background: var(--sidebar); display: flex; flex-direction: column; position: relative; }
+.grip { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 5; }
+.grip:hover, .grip.on { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { pointer-events: none; }
 .ptabs { display: flex; align-items: center; gap: 2px; padding: 34px 10px 6px; border-bottom: 1px solid var(--line); -webkit-app-region: drag; }
 .ptab { font-size: 11.5px; font-weight: 500; color: var(--muted); padding: 4px 10px; border-radius: 6px; -webkit-app-region: no-drag; }
 .ptab.on { background: var(--fill); color: var(--text); } .ptab:hover { background: var(--fill); }
@@ -212,13 +215,13 @@ input.text:focus { border-color: var(--accent); }
 .turnblock .result { margin: -4px 0 0 20px; }
 .toolchip { align-self: flex-start; font-size: 11px; color: var(--muted); background: var(--fill); padding: 3px 9px; border-radius: 999px; cursor: pointer; }
 .toolchip:hover { background: var(--fill-2); }
-.small-btn { font-size: 10.5px; padding: 2px 8px; margin-left: auto; text-transform: none; letter-spacing: 0; }
 .filechange { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .filechange .fh { display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 11.5px; cursor: pointer; background: color-mix(in srgb, var(--fill) 60%, transparent); }
 .filechange .fh .p { font-family: var(--mono); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .filechange .fh .plus { color: var(--ok); } .filechange .fh .minus { color: var(--err); }
 .filechange .fb { display: none; } .filechange.open .fb { display: block; }
 .filechange .diff { display: block; border: 0; border-radius: 0; }
-.gitdiff, .stat { font: 11px/1.5 var(--mono); white-space: pre-wrap; word-break: break-all; margin: 0; padding: 8px; background: var(--code); border-radius: 8px; max-height: 60vh; overflow: auto; color: var(--muted); }
-.gitdiff .add { color: var(--ok); } .gitdiff .del { color: var(--err); } .gitdiff .hunk { color: var(--accent); }
+.gitdiff { font: 11px/1.5 var(--mono); white-space: pre-wrap; word-break: break-all; margin: 0; padding: 6px 8px; background: var(--code); max-height: 50vh; overflow: auto; color: var(--muted); }
+.gitdiff .add { color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); } .gitdiff .del { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); } .gitdiff .hunk { color: var(--accent); margin-top: 4px; }
+.filechange .fh .tag { font-size: 10px; color: var(--faint); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
 #app.with-panel .composer-wrap, #app.with-panel .timeline { max-width: 680px; }

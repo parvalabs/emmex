@@ -165,13 +165,15 @@ public final class AppController {
         case "workspace_diff":
             guard let ws = workspace else { return ["error": "no workspace"] }
             let cwd = current?.cwd ?? ws.path
-            func git(_ args: [String]) -> String {
+            func git(_ args: [String]) -> String? {
                 let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/git"); p.arguments = args; p.currentDirectoryURL = URL(fileURLWithPath: cwd)
-                let pipe = Pipe(); p.standardOutput = pipe; p.standardError = pipe
-                (try? p.run()) ?? (); let d = pipe.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit()
-                return String(decoding: d, as: UTF8.self)
+                let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
+                guard (try? p.run()) != nil else { return nil }
+                let d = out.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit()
+                return p.terminationStatus == 0 ? String(decoding: d, as: UTF8.self) : nil
             }
-            return ["stat": git(["diff", "--stat"]), "diff": String(git(["diff"]).prefix(200_000)), "untracked": git(["ls-files", "--others", "--exclude-standard"])]
+            guard let diff = git(["diff", "--no-color", "--no-ext-diff"]) else { return ["isRepo": false] }
+            return ["isRepo": true, "diff": String(diff.prefix(300_000)), "untracked": git(["ls-files", "--others", "--exclude-standard"]) ?? ""]
         case "export":
             guard let cur = current else { return ["error": "no session"] }
             try? cur.save()
