@@ -11,7 +11,7 @@ import MlexServer
     }
     static let configuration = CommandConfiguration(
         abstract: "mlex: local-first agent on Apple Foundation Models, MLX models, and Claude.",
-        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self, MemoryCmd.self, Serve.self, Trust.self, Policy.self, SandboxCmd.self, RouteCmd.self, EvalCmd.self],
+        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self, MemoryCmd.self, Serve.self, Trust.self, Policy.self, SandboxCmd.self, RouteCmd.self, EvalCmd.self, SecretsCmd.self],
         defaultSubcommand: Chat.self)
 }
 
@@ -260,11 +260,26 @@ struct RouteCmd: AsyncParsableCommand {
     }
 }
 
+// MARK: secrets (debug)
+
+struct SecretsCmd: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "secrets", abstract: "Debug: show what the secret scanner finds in a message, without sending it.")
+    @Flag(name: .long, help: "Patterns only; skip the on-device model.") var rulesOnly = false
+    @Argument(parsing: .remaining) var text: [String]
+    func run() async throws {
+        let t = text.joined(separator: " ")
+        let found = await SecretScanner.scan(t, useModel: !rulesOnly)
+        if found.isEmpty { print("clean\(SecretScanner.mentionsSecrets(t) && !rulesOnly ? " (the on-device model checked it)" : "")"); return }
+        for f in found { print("\(f.source): \(f.label)  \(f.preview)") }
+        print("redacted: \(SecretScanner.redact(t, found))")
+    }
+}
+
 // MARK: eval (debug)
 
 struct EvalCmd: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "eval", abstract: "Debug: label and run the routing and safety eval sets in evals/.",
-                                                    subcommands: [Label.self, RunOnDevice.self])
+                                                    subcommands: [Label.self, RunOnDevice.self, Secrets.self])
 
     static func read<T: Decodable>(_ path: String, as: T.Type) throws -> [T] {
         try String(contentsOfFile: path, encoding: .utf8).split(separator: "\n").filter { !$0.isEmpty }
@@ -292,6 +307,16 @@ struct EvalCmd: AsyncParsableCommand {
             try EvalCmd.write(cmds, to: cp)
             func counts(_ l: [String?]) -> String { Dictionary(grouping: l.compactMap { $0 }, by: { $0 }).map { "\($0.key)=\($0.value.count)" }.sorted().joined(separator: " ") }
             print("routing: \(counts(routes.map(\.label)))\ncommands: \(counts(cmds.map(\.label)))")
+        }
+    }
+
+    struct Secrets: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Run the secret scanner, rules alone and with the on-device model, over evals/data/secrets.jsonl.")
+        @Option(name: .long) var dir: String = "evals"
+        func run() async throws {
+            let items = try EvalCmd.read(dir + "/data/secrets.jsonl", as: EvalHarness.SecretItem.self)
+            try EvalCmd.writeRows(await EvalHarness.runSecrets(items), to: dir + "/results/secrets.jsonl")
+            print("wrote \(dir)/results/secrets.jsonl")
         }
     }
 

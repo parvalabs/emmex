@@ -44,6 +44,7 @@ public enum MlexError: Error, CustomStringConvertible {
     case modelUnavailable(String)
     case missingAPIKey
     case notInstalled(String)
+    case secretDetected(String)
 
     public var description: String {
         switch self {
@@ -51,6 +52,7 @@ public enum MlexError: Error, CustomStringConvertible {
         case .modelUnavailable(let why): "model unavailable: \(why)"
         case .missingAPIKey: "no Anthropic API key: set ANTHROPIC_API_KEY or add a Keychain item with service 'mlex-anthropic'"
         case .notInstalled(let id): "MLX model '\(id)' is not installed; run: mlex models pull \(id)"
+        case .secretDetected(let what): "not sent: the message contains \(what). Nothing reached a model or the session. Refer to secrets by environment variable instead, for example \"Authorization: Bearer $API_TOKEN\"."
         }
     }
 }

@@ -35,6 +35,7 @@ public final class AppController {
     var backends: [Backends.Status] = []
     var loadingID: String?, residentID: String?
     var residents: [[String: Any]] = []
+    private var uncheckedQueue: Set<String> = []   // queued texts that skipped the secret scan
     var footprint: Int64 = 0
 
     // Models
@@ -131,7 +132,18 @@ public final class AppController {
         case "delete_session": if let id = str("id") { deleteSession(id) }
         case "fork": if let id = str("id") { fork(id, beforeUserTurn: a["before"] as? Int) }
         case "reveal": if let id = str("id") { revealWorktree(id) }
-        case "send": if let t = str("text") { send(t) }
+        case "send":
+            guard let t = str("text") else { break }
+            // Scan before the message touches the timeline, the queue, a model or the session.
+            if Settings.load().secretScan, !(t.hasPrefix("/") && !t.contains(" ")) {
+                let found = await SecretScanner.scan(t)
+                if !found.isEmpty {
+                    return ["blocked": true, "summary": SecretScanner.describe(found),
+                            "findings": found.map { ["label": $0.label, "preview": $0.preview, "source": $0.source] },
+                            "redacted": SecretScanner.redact(t, found)]
+                }
+            }
+            send(t, checked: true)
         case "stop": stop()
         case "clear_queue": queue.removeAll(); push()
         case "select_model": if let s = str("spec"), let spec = try? ModelSpec(parsing: s) { select(spec) }
@@ -350,10 +362,11 @@ public final class AppController {
 
     // MARK: sending
 
-    public func send(_ raw: String) {
+    /// `checked`: the caller already ran the secret scan on `raw`.
+    public func send(_ raw: String, checked: Bool = false) {
         let raw = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else { return }
-        if busy, current != nil { queue.append(raw); push(); return }
+        if busy, current != nil { queue.append(raw); if !checked { uncheckedQueue.insert(raw) }; push(); return }
         guard let cur = current else { if workspace != nil { pending = raw; busy = true; push() }; return }
         if raw == "/compact" { compact(); return }
         if raw == "/new" { newSession(); return }
@@ -362,14 +375,14 @@ public final class AppController {
         timeline.append(.init(id: UUID().uuidString, kind: "user", title: "", text: raw, userTurn: turn))
         busy = true; push()
         runTask = Task {
-            do { try await cur.run(prompt, effort: effort) }
+            do { try await cur.run(prompt, effort: effort, secretsChecked: checked && prompt == raw) }
             catch is CancellationError { info("stopped") }
             catch { self.error("\(error)") }
             await updateContext(); await refreshMemory()
             busy = false; runTask = nil
             if let ws = workspace { sessions = SessionStore.list(workspace: ws) }
             push()
-            if !queue.isEmpty { send(queue.removeFirst()) }
+            if !queue.isEmpty { let next = queue.removeFirst(); send(next, checked: uncheckedQueue.remove(next) == nil) }
         }
     }
 

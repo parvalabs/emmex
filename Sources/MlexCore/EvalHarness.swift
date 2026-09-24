@@ -117,6 +117,63 @@ public enum EvalHarness {
         return rows
     }
 
+    // MARK: secrets
+
+    /// Synthetic secrets for tests and the secrets eval. Built from pieces at runtime so the repo
+    /// never contains a string that looks like a live credential to a secret scanner.
+    public static func fixture(_ name: String) -> String {
+        let alnum = "Q7vK2mX9pL4sR8tW1zN6bJ3cH5dF0gY"
+        func run(_ n: Int) -> String { String((0..<n).map { alnum[alnum.index(alnum.startIndex, offsetBy: ($0 * 7 + 3) % alnum.count)] }) }
+        switch name {
+        case "anthropic": return "sk-" + "ant-" + "api03-" + run(40)
+        case "openai": return "sk-" + "proj-" + run(40)
+        case "github": return "gh" + "p_" + run(36)
+        case "aws": return "AK" + "IA" + run(16).uppercased().replacingOccurrences(of: "0", with: "Z")
+        case "google": return "AI" + "za" + run(35)
+        case "slack": return "xo" + "xb-" + "1234567890-" + run(24)
+        case "hf": return "h" + "f_" + run(34)
+        case "stripe": return "sk" + "_live_" + run(24)
+        case "npm": return "np" + "m_" + run(36)
+        case "jwt": return "ey" + "J" + run(20) + ".ey" + "J" + run(30) + "." + run(24)
+        case "opaque40": return run(40)
+        case "pw": return "Tr0ub4dor" + "&3x"
+        default: return "{{\(name)}}"
+        }
+    }
+
+    /// `{{name}}` placeholders replaced with fixtures.
+    public static func expandFixtures(_ text: String) -> String {
+        var out = text
+        for name in ["anthropic", "openai", "github", "aws", "google", "slack", "hf", "stripe", "npm", "jwt", "opaque40", "pw"] {
+            out = out.replacingOccurrences(of: "{{\(name)}}", with: fixture(name))
+        }
+        return out
+    }
+
+    public struct SecretItem: Codable, Sendable {
+        public var id: String
+        public var text: String
+        public var secret: Bool
+    }
+
+    /// Rules alone and rules plus the on-device model, with latency and whether the model ran.
+    public static func runSecrets(_ items: [SecretItem]) async -> [[String: Any]] {
+        var rows: [[String: Any]] = []
+        for item in items {
+            let text = expandFixtures(item.text)
+            var t0 = Date()
+            let rules = SecretScanner.ruleFindings(text)
+            let rulesMs = Date().timeIntervalSince(t0) * 1000
+            t0 = Date()
+            let full = await SecretScanner.scan(text)
+            let fullMs = Date().timeIntervalSince(t0) * 1000
+            rows.append(["id": item.id, "secret": item.secret, "rules": !rules.isEmpty, "full": !full.isEmpty,
+                         "modelRan": rules.isEmpty && SecretScanner.mentionsSecrets(text),
+                         "found": full.map { "\($0.source):\($0.kind)" }, "rulesMs": rulesMs, "fullMs": fullMs])
+        }
+        return rows
+    }
+
     static func mapConcurrently<T: Sendable, R: Sendable>(_ items: [T], _ width: Int, _ f: @escaping @Sendable (T) async throws -> R) async throws -> [R] {
         var results = [R?](repeating: nil, count: items.count)
         try await withThrowingTaskGroup(of: (Int, R).self) { group in

@@ -214,7 +214,12 @@ public final class AgentSession: @unchecked Sendable {
 
     /// Run one user turn, streaming text deltas and tool events to the sink. Returns the final text.
     @discardableResult
-    public func run(_ prompt: String, effort: Effort = .default) async throws -> String {
+    public func run(_ prompt: String, effort: Effort = .default, secretsChecked: Bool = false) async throws -> String {
+        // Before anything else: routing, memory, the transcript and the title all see the prompt.
+        if !secretsChecked, Settings.load().secretScan {
+            let found = await SecretScanner.scan(prompt)
+            if !found.isEmpty { throw MlexError.secretDetected(SecretScanner.describe(found)) }
+        }
         // Outcome signal for the previous turn: does this prompt read like a correction?
         if let last = record.routes.indices.last, record.routes[last].followedByCorrection == nil {
             record.routes[last].followedByCorrection = Self.looksLikeCorrection(prompt)

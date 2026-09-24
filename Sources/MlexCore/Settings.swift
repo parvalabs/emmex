@@ -19,7 +19,7 @@ public struct Settings: Codable, Sendable {
     public init() {}
 
     // Every key is optional in the file: a partial settings.json keeps the defaults for the rest.
-    enum CodingKeys: String, CodingKey { case routes, router, memory, providers, permission, sandbox, network, unsandboxedRetry }
+    enum CodingKeys: String, CodingKey { case routes, router, memory, providers, permission, sandbox, network, unsandboxedRetry, secretScan }
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         routes = try c.decodeIfPresent(Routes.self, forKey: .routes) ?? Routes()
@@ -30,6 +30,7 @@ public struct Settings: Codable, Sendable {
         sandbox = try c.decodeIfPresent(Bool.self, forKey: .sandbox) ?? true
         network = try c.decodeIfPresent(Network.self, forKey: .network) ?? Network()
         unsandboxedRetry = try c.decodeIfPresent(Bool.self, forKey: .unsandboxedRetry) ?? true
+        secretScan = try c.decodeIfPresent(Bool.self, forKey: .secretScan) ?? true
     }
     /// "ondevice" (default) or "jev" (TypeSafe Jev; needs a key in Keychain service `mlex-jev` or JEV_API_KEY).
     public var router: String = "ondevice"
@@ -51,6 +52,8 @@ public struct Settings: Codable, Sendable {
     /// When a sandboxed command fails on a sandbox denial, offer to rerun it unsandboxed
     /// (asks, except in full mode where it retries with an audit line). false: never.
     public var unsandboxedRetry: Bool = true
+    /// Block messages that contain passwords, tokens or keys before they reach any model.
+    public var secretScan: Bool = true
 
     /// OpenAI-compatible chat-completions providers, keyed by the name used in specs (`<name>:<model>`).
     public struct Provider: Codable, Sendable, Hashable {

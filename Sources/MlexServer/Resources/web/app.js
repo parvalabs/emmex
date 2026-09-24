@@ -424,8 +424,29 @@ $('#open-models').onclick = openModels; $('#open-tools').onclick = openTools;
 /* ---------- composer ---------- */
 const input = $('#input');
 function autosize() { input.style.height = 'auto'; input.style.height = Math.min(260, input.scrollHeight) + 'px'; }
-function send() { const t = input.value.trim(); if (!t) return; input.value = ''; autosize(); hideSuggest(); act({ type: 'send', text: t }); }
-$('#send').onclick = send;
+async function send(text) {
+  const t = (text ?? input.value).trim(); if (!t) return;
+  input.value = ''; autosize(); hideSuggest(); $('#blocked').innerHTML = '';
+  const r = await act({ type: 'send', text: t });
+  if (r && r.blocked) showBlocked(t, r);
+}
+/* The server refused the message because it contains a secret: nothing was sent or saved.
+   Put the text back so it can be edited, and offer the redacted version. */
+function showBlocked(original, r) {
+  if (!input.value.trim()) { input.value = original; autosize(); updateSend(); }
+  const box = $('#blocked'); box.innerHTML = '';
+  const c = el('div', 'approval blocked');
+  const h = el('div', 'head'); h.append(el('span', 'tool', '⛔ Not sent')); c.append(h);
+  const ul = el('ul');
+  for (const f of r.findings || []) { const li = el('li', '', 'Contains ' + f.label); li.append(el('span', 'pv', f.preview)); if (f.source === 'model') li.title = 'Found by the on-device model'; ul.append(li); }
+  c.append(ul);
+  c.append(el('div', 'why', 'Nothing reached a model, memory or the session. Use an environment variable such as $API_TOKEN instead, or send it with the secret replaced by [REDACTED].'));
+  const acts = el('div', 'acts');
+  const edit = el('button', 'btn', 'Edit'); edit.onclick = () => { box.innerHTML = ''; input.focus(); };
+  const red = el('button', 'btn primary', 'Send redacted'); red.onclick = () => { input.value = ''; autosize(); send(r.redacted); };
+  acts.append(edit, red); c.append(acts); box.append(c);
+}
+$('#send').onclick = () => send();
 input.addEventListener('input', () => { autosize(); updateSend(); suggest(); });
 input.addEventListener('keydown', (e) => {
   const sg = $('#suggest'); if (!sg.classList.contains('hidden')) {
