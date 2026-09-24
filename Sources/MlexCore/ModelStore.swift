@@ -12,10 +12,22 @@ public actor ModelStore {
 
     public let root: URL
     private var loaded: [String: MLXLanguageModel] = [:]
-    /// The one MLX model whose weights are resident. Selecting another evicts it.
-    public private(set) var residentID: String?
+    /// MLX models whose weights are resident, least recently used first. Loading another model
+    /// evicts from the front until it fits.
+    public private(set) var residents: [String] = []
+    /// The most recently used resident model.
+    public var residentID: String? { residents.last }
     /// Sent when residency changes, so UIs can update without polling.
-    public var onResidentChange: (@Sendable (String?) -> Void)?
+    public var onResidentChange: (@Sendable ([String]) -> Void)?
+
+    public struct Resident: Sendable, Identifiable {
+        public var id: String
+        public var sizeBytes: Int64
+    }
+    /// Resident models with their on-disk weight size (close to what they map in memory).
+    public func residentModels() -> [Resident] {
+        residents.reversed().map { Resident(id: $0, sizeBytes: Self.size(of: directory(for: $0))) }
+    }
 
     public init(root: URL? = nil) {
         self.root = root ?? URL(fileURLWithPath: NSHomeDirectory()).appending(path: ".cache/mlex/models")
@@ -82,17 +94,22 @@ public actor ModelStore {
     }
 
     public func remove(_ id: String) async throws {
-        if residentID == id { await unloadResident() }
+        if residents.contains(id) { await unload(id) }
         try FileManager.default.removeItem(at: directory(for: id))
         loaded[id] = nil
     }
 
-    /// A `LanguageModel` for an installed MLX model, with its weights loaded. Only one MLX
-    /// model is kept resident: asking for a different one evicts the previous model first.
+    /// A `LanguageModel` for an installed MLX model, with its weights loaded. Several models can
+    /// stay resident; when memory is short the least recently used ones are evicted first.
     /// `.reasoning` is always declared so thinking can be switched per request via `Effort`.
     public func languageModel(for id: String) async throws -> MLXLanguageModel {
         guard isInstalled(id) else { throw MlexError.notInstalled(id) }
-        if residentID != id { await unloadResident() }
+        if residents.contains(id) {
+            residents.removeAll { $0 == id }; residents.append(id)   // most recently used
+        } else {
+            let needed = Self.needed(for: directory(for: id))
+            while !residents.isEmpty, needed > SystemMemory.available() { await unload(residents[0]) }
+        }
         let model: MLXLanguageModel
         if let m = loaded[id] { model = m } else {
             let dir = directory(for: id)
@@ -104,8 +121,8 @@ public actor ModelStore {
             loaded[id] = model
         }
         try await model.preload()
-        residentID = id
-        onResidentChange?(id)
+        if !residents.contains(id) { residents.append(id) }
+        onResidentChange?(residents)
         return model
     }
 
@@ -118,20 +135,31 @@ public actor ModelStore {
         return min(n, 32_768)
     }
 
-    /// Free the resident model's weights. The next use reloads from disk.
-    public func unloadResident() async {
-        guard let id = residentID else { return }
+    /// Free one resident model's weights. The next use reloads from disk.
+    public func unload(_ id: String) async {
+        guard residents.contains(id) else { return }
         await loaded[id]?.evict()
-        residentID = nil
-        onResidentChange?(nil)
+        residents.removeAll { $0 == id }
+        onResidentChange?(residents)
     }
 
-    /// How much memory loading `id` would need versus what the system can spare right now.
-    /// Weights map at roughly their on-disk size; working memory adds a margin.
+    /// Free every resident model.
+    public func unloadAll() async { for id in residents.reversed() { await unload(id) } }
+
+    /// Kept for callers that only know about one resident: unloads the most recently used.
+    public func unloadResident() async { if let id = residentID { await unload(id) } }
+
+    /// How much memory loading `id` would need versus what the system can spare, counting the
+    /// residents that would be evicted to make room. An already-resident model needs nothing.
     public func headroom(for id: String) -> (needed: Int64, available: Int64) {
-        let needed = Int64(Double(Self.size(of: directory(for: id))) * 1.15)
-        return (needed, SystemMemory.available())
+        if residents.contains(id) { return (0, SystemMemory.available()) }
+        let needed = Self.needed(for: directory(for: id))
+        let reclaimable = residents.reduce(Int64(0)) { $0 + Self.needed(for: directory(for: $1)) }
+        return (needed, SystemMemory.available() + reclaimable)
     }
+
+    /// Weights map at roughly their on-disk size; working memory adds a margin.
+    static func needed(for dir: URL) -> Int64 { Int64(Double(size(of: dir)) * 1.15) }
 
     static func size(of dir: URL) -> Int64 {
         guard let e = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: [.fileSizeKey]) else { return 0 }

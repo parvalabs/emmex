@@ -95,7 +95,7 @@ public enum Backends {
             return LanguageModelSession(model: m, tools: tools, instructions: instructions)
         case .mlx(let id):
             let (needed, available) = await ModelStore.shared.headroom(for: id)
-            if needed > available {
+            if needed > 0, needed > available {
                 onWarning?("\(id) needs about \(SystemMemory.format(needed)) but only \(SystemMemory.format(available)) is available; expect swapping")
             }
             let m = try await ModelStore.shared.languageModel(for: id)

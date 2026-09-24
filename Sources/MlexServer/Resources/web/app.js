@@ -261,10 +261,16 @@ async function refreshGitDiff() {
 /* Panel resize: drag the left edge; the width is remembered. */
 (() => {
   const panel = $('#panel'); const grip = $('#panel-grip');
-  try { const w = parseInt(localStorage.getItem('mlex.panelW') || '', 10); if (w) panel.style.width = w + 'px'; } catch {}
+  // The conversation keeps at least 440px; the panel gives way first on narrow windows.
+  const maxW = () => Math.max(240, window.innerWidth - $('#sidebar').getBoundingClientRect().width - 440);
+  const clamp = (w) => Math.max(240, Math.min(maxW(), w));
+  let wanted = 400;
+  try { const w = parseInt(localStorage.getItem('mlex.panelW') || '', 10); if (w) wanted = w; } catch {}
+  const apply = () => { panel.style.width = clamp(wanted) + 'px'; };
+  apply(); window.addEventListener('resize', apply);
   grip.onmousedown = (e) => {
     e.preventDefault(); const startX = e.clientX; const startW = panel.getBoundingClientRect().width; document.body.classList.add('resizing'); grip.classList.add('on');
-    const move = (ev) => { const w = Math.max(280, Math.min(window.innerWidth * 0.7, startW + (startX - ev.clientX))); panel.style.width = w + 'px'; };
+    const move = (ev) => { wanted = clamp(startW + (startX - ev.clientX)); panel.style.width = wanted + 'px'; };
     const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); document.body.classList.remove('resizing'); grip.classList.remove('on'); try { localStorage.setItem('mlex.panelW', String(Math.round(panel.getBoundingClientRect().width))); } catch {} };
     document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
   };
@@ -310,8 +316,26 @@ function renderSessions() {
   }
 }
 
+/* Loaded MLX models: reusable across sessions without another load; ⏏ frees the weights. */
+function shortModel(id) { return id.replace(/^mlx:/, '').replace(/^mlx-community\//, ''); }
+function renderLoaded() {
+  const box = $('#loaded-list'); box.innerHTML = '';
+  const rows = (S.residents || []).map(r => ({ id: r.id, size: r.size, loading: false }));
+  if (S.loading && !rows.some(r => r.id === S.loading)) rows.unshift({ id: S.loading, size: '', loading: true });
+  $('#loaded').classList.toggle('hidden', !rows.length);
+  for (const r of rows) {
+    const spec = 'mlx:' + r.id; const row = el('div', 'lrow' + (S.selected === spec ? ' on' : ''));
+    row.append(el('span', 'dot2' + (r.loading ? ' loading' : '')), el('span', 'n', shortModel(r.id)), el('span', 'sz', r.loading ? 'loading…' : r.size));
+    row.title = r.loading ? `${r.id} is loading` : `${r.id} · loaded · click to use in this session`;
+    if (!r.loading) { const e = el('button', 'eject', '⏏'); e.title = 'Unload'; e.onclick = (ev) => { ev.stopPropagation(); act({ type: 'unload', id: r.id }); }; row.append(e); }
+    row.onclick = () => { if (!r.loading && S.selected !== spec) act({ type: 'select_model', spec }); };
+    box.append(row);
+  }
+}
+
 /* ---------- top bar & composer ---------- */
 function renderChrome() {
+  renderLoaded();
   $('#ws-name').textContent = S.workspace ? S.workspace.name : 'Open a folder';
   $('#title').textContent = S.current ? S.current.title : 'mlex';
   const wt = $('#worktree'); if (S.current && S.current.worktree) { wt.textContent = '⑂ ' + S.current.worktree; wt.classList.remove('hidden'); } else wt.classList.add('hidden');
@@ -320,7 +344,7 @@ function renderChrome() {
     ctx.classList.remove('hidden'); ctx.classList.toggle('warn', f > .75); $('#ctx-pct').textContent = Math.round(f * 100) + '%';
     $('#ring').style.strokeDashoffset = (37.7 * (1 - f)).toFixed(2); ctx.title = `Context: ${S.current.contextUsed.toLocaleString()} of ${S.current.contextSize.toLocaleString()} tokens. Click to compact.`;
   } else ctx.classList.add('hidden');
-  $('#model-label').textContent = S.selected === 'auto' ? `Auto · ${S.current ? S.current.effectiveModel : '…'}` : S.selected;
+  $('#model-label').textContent = S.loading ? `Loading ${shortModel(S.loading)}…` : S.selected === 'auto' ? `Auto · ${S.current ? S.current.effectiveModel : '…'}` : S.selected;
   $('#effort-label').textContent = S.effort === 'off' ? 'Effort' : S.effort[0].toUpperCase() + S.effort.slice(1);
   $('#stop').classList.toggle('hidden', !S.busy);
   document.querySelectorAll('#modes .seg').forEach(b => b.classList.toggle('on', b.dataset.mode === S.mode));
@@ -357,6 +381,7 @@ function menu(x, y, entries) {
     if (e.section) { m.append(el('div', 'sec', e.section)); continue; }
     const it = el('div', 'item' + (e.on ? ' on' : '') + (e.danger ? ' danger' : ''), e.label);
     if (e.sub) it.append(el('span', 'sub', e.sub));
+    if (e.tag) it.append(el('span', 'tag' + (e.tag.startsWith('loading') ? ' loading' : ''), e.tag));
     it.onclick = () => { m.classList.add('hidden'); e.run(); }; m.append(it);
   }
   const r = m.getBoundingClientRect();
@@ -369,12 +394,15 @@ function anchorMenu(btn, entries) { const r = btn.getBoundingClientRect(); menu(
 $('#model-btn').onclick = (ev) => { ev.stopPropagation();
   const entries = [{ section: 'Routing' }, mi('auto')];
   const specs = S.backends.filter(b => b.available && b.spec !== 'auto').map(b => b.spec);
-  const grp = (t, f) => { const l = specs.filter(f); if (l.length) { entries.push({ section: t }); l.forEach(s => entries.push(mi(s))); } };
+  const isLoaded = (s) => s.startsWith('mlx:') && (S.residents || []).some(r => 'mlx:' + r.id === s);
+  const grp = (t, f) => { const l = specs.filter(f).sort((a, b) => isLoaded(b) - isLoaded(a)); if (l.length) { entries.push({ section: t }); l.forEach(s => entries.push(mi(s))); } };
   grp('Apple', s => s === 'system' || s === 'pcc'); grp('Claude', s => s.startsWith('claude:')); grp('Local MLX', s => s.startsWith('mlx:'));
   grp('Providers', s => !['system', 'pcc'].includes(s) && !s.startsWith('claude:') && !s.startsWith('mlx:') && !s.endsWith(':<model>'));
   entries.push({ sep: true }, { label: 'Manage models…', run: openModels });
   anchorMenu($('#model-btn'), entries);
-  function mi(s) { return { label: s, on: S.selected === s, run: () => act({ type: 'select_model', spec: s }) }; } };
+  function mi(s) { const id = s.startsWith('mlx:') ? s.slice(4) : null;
+    const tag = id && S.loading === id ? 'loading…' : id && (S.residents || []).some(r => r.id === id) ? 'loaded' : null;
+    return { label: s, on: S.selected === s, tag, run: () => act({ type: 'select_model', spec: s }) }; } };
 $('#effort-btn').onclick = (ev) => { ev.stopPropagation(); anchorMenu($('#effort-btn'), ['off', 'low', 'medium', 'high'].map(e => ({ label: e[0].toUpperCase() + e.slice(1), on: S.effort === e, run: () => act({ type: 'set_effort', effort: e }) }))); };
 $('#workspace').onclick = (ev) => { ev.stopPropagation(); const r = $('#workspace').getBoundingClientRect();
   const entries = S.recents.map(w => ({ label: w.name, on: S.workspace && S.workspace.path === w.path, sub: w.path.replace(/^\/Users\/[^/]+/, '~'), run: () => act({ type: 'open_workspace', path: w.path }) }));
@@ -434,7 +462,7 @@ function openModels() {
       const g = el('div', 'grow'); g.append(el('div', 'spec', b.spec), el('div', 'det', b.detail)); r.append(g);
       if (b.spec.startsWith('mlx:')) { const id = b.spec.slice(4);
         if (S.loading === id) r.append(el('span', 'small', 'loading…'));
-        else if (S.resident === id) { const u = el('button', 'btn', 'Unload'); u.onclick = () => act({ type: 'unload' }); r.append(u); }
+        else if ((S.residents || []).some(x => x.id === id)) { const u = el('button', 'btn', 'Unload'); u.onclick = () => act({ type: 'unload', id }); r.append(u); }
         const d = el('button', 'btn danger', 'Remove'); d.onclick = () => { if (confirm(`Delete ${id} from disk?`)) act({ type: 'remove_model', id }); }; r.append(d); }
       c.append(r);
     }
@@ -442,7 +470,7 @@ function openModels() {
     const row = el('div', 'pull'); const f = el('input', 'text'); f.placeholder = 'mlx-community/…'; f.value = 'mlx-community/Qwen3-4B-4bit';
     const p = el('button', 'btn primary', 'Pull'); p.onclick = () => act({ type: 'pull', id: f.value }); f.onkeydown = (e) => { if (e.key === 'Enter') p.click(); }; row.append(f, p); c.append(row);
     const pulls = el('div'); pulls.id = 'pulls'; c.append(pulls); renderPulls();
-    c.append(el('p', 'small', 'Only one MLX model stays loaded; selecting another unloads it. Weights live in ~/.cache/mlex/models.'));
+    c.append(el('p', 'small', `Loaded models stay in memory and are shared across sessions; when memory runs short the least recently used one is unloaded first. Free now: ${S.free}. Weights live in ~/.cache/mlex/models.`));
   });
 }
 function renderPulls() {

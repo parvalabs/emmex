@@ -50,6 +50,19 @@ kbd { font: 10.5px var(--font); color: var(--faint); }
 .sess.active { background: var(--fill-2); }
 .sess .t { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .sess .wt { color: var(--accent); font-size: 11px; }
+.loaded { border-top: 1px solid var(--line); padding: 0 6px 6px; }
+.loaded .sec { padding-top: 8px; }
+.lrow { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 7px; font-size: 12px; cursor: pointer; }
+.lrow:hover { background: var(--fill); } .lrow.on { background: var(--fill); }
+.lrow .dot2 { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); flex: 0 0 auto; }
+.lrow .dot2.loading { background: var(--accent); animation: pulse 1s infinite alternate; }
+@keyframes pulse { from { opacity: .35; } to { opacity: 1; } }
+.lrow .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lrow .sz { font-size: 10.5px; color: var(--faint); }
+.lrow .eject { color: var(--faint); font-size: 12px; padding: 0 3px; border-radius: 4px; visibility: hidden; }
+.lrow:hover .eject { visibility: visible; } .lrow .eject:hover { color: var(--text); background: var(--fill-2); }
+.menu .tag { margin-left: auto; font-size: 10px; color: var(--ok); padding-left: 10px; }
+.menu .tag.loading { color: var(--accent); }
 .foot { display: flex; align-items: center; gap: 2px; padding: 8px 10px; border-top: 1px solid var(--line); }
 .foot-btn { padding: 4px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 500; color: var(--muted); }
 .foot-btn:hover { background: var(--fill); }
@@ -202,7 +215,7 @@ input.text:focus { border-color: var(--accent); }
 .edit .l.ctx { color: var(--faint); }
 
 /* ---------- activity / changes panel ---------- */
-.panel { width: 400px; flex: 0 0 auto; min-width: 280px; max-width: 70vw; border-left: 1px solid var(--line); background: var(--sidebar); display: flex; flex-direction: column; position: relative; }
+.panel { width: 400px; flex: 0 0 auto; min-width: 240px; border-left: 1px solid var(--line); background: var(--sidebar); display: flex; flex-direction: column; position: relative; }
 .grip { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 5; }
 .grip:hover, .grip.on { background: color-mix(in srgb, var(--accent) 45%, transparent); }
 body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { pointer-events: none; }

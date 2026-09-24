@@ -60,8 +60,6 @@ that closed them rather than deleting them. Dates are when the item was added.
 - **Session diff commit flow** (2026-09-23): from the Changes panel, stage and commit the
   session's edits with a generated conventional message.
 
-- **Loading state for MLX models** (2026-09-22): the picker shows a spinner; the
-  timeline should say what is loading and how big it is.
 - **Silent exit on launch** (2026-09-22): seen twice in the SwiftUI era, never reproduced;
   direct exec of the bundle binary opens no window while `open` does. Not understood.
 - **Keyboard shortcuts** (2026-09-23): ⌘N, ⌘K compact, ⌘. stop exist; add session

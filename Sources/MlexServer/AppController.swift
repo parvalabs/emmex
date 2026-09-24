@@ -34,6 +34,7 @@ public final class AppController {
     var effort: Effort = .default
     var backends: [Backends.Status] = []
     var loadingID: String?, residentID: String?
+    var residents: [[String: Any]] = []
     var footprint: Int64 = 0
 
     // Models
@@ -69,7 +70,7 @@ public final class AppController {
             "busy": busy, "queue": queue,
             "selected": selected.description, "effort": effort.rawValue,
             "backends": backends.map { ["spec": $0.spec, "available": $0.available, "detail": $0.detail] },
-            "loading": loadingID as Any, "resident": residentID as Any,
+            "loading": loadingID as Any, "resident": residentID as Any, "residents": residents,
             "footprint": SystemMemory.format(footprint), "free": SystemMemory.format(SystemMemory.available()),
             "pulls": pulls, "pullErrors": pullErrors,
             "mcp": mcpSummary.map { ["server": $0.server, "info": $0.info, "tools": $0.tools] },
@@ -111,6 +112,7 @@ public final class AppController {
     func refreshModels() async {
         backends = await Backends.status()
         residentID = await ModelStore.shared.residentID
+        residents = await ModelStore.shared.residentModels().map { ["id": $0.id, "size": SystemMemory.format($0.sizeBytes)] }
         footprint = SystemMemory.footprint()
     }
 
@@ -138,7 +140,9 @@ public final class AppController {
         case "pull": if let id = str("id") { pull(id) }
         case "cancel_pull": if let id = str("id") { pullTasks[id]?.cancel() }
         case "remove_model": if let id = str("id") { Task { try? await ModelStore.shared.remove(id); await refreshModels(); push() } }
-        case "unload": Task { await ModelStore.shared.unloadResident(); await refreshModels(); push() }
+        case "unload":
+            let id = str("id")
+            Task { if let id { await ModelStore.shared.unload(id) } else { await ModelStore.shared.unloadAll() }; await refreshModels(); push() }
         case "forget": if let id = str("id"), let ws = workspace { Task { try? await MemoryStore.shared.remove(id, workspace: ws); await refreshMemory(); push() } }
         case "clear_memory": if let ws = workspace { Task { try? await MemoryStore.shared.clear(workspace: ws); await refreshMemory(); push() } }
         case "restore_fact": if let id = str("id"), let ws = workspace { Task { try? await MemoryStore.shared.restore(id, workspace: ws); await refreshMemory(); push() } }
