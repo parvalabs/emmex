@@ -13,16 +13,22 @@ public final class AgentSession: @unchecked Sendable {
     private var counters: CounterBox?
     final class CounterBox: @unchecked Sendable {
         var toolCalls = 0, errors = 0
+        var firstOutputAt: Date? = nil      // first visible output of the turn: text or a tool call
         let lock = NSLock()
         func note(_ ev: AgentEvent) {
             lock.lock(); defer { lock.unlock() }
+            switch ev {
+            case .textDelta, .toolCall: if firstOutputAt == nil { firstOutputAt = Date() }
+            default: break
+            }
             switch ev {
             case .toolCall: toolCalls += 1
             case .toolResult(_, let out): if (out.hasPrefix("exit=") && !out.hasPrefix("exit=0")) || out.hasPrefix("error") || out.hasPrefix("denied") { errors += 1 }
             default: break
             }
         }
-        func reset() { lock.lock(); toolCalls = 0; errors = 0; lock.unlock() }
+        func reset() { lock.lock(); toolCalls = 0; errors = 0; firstOutputAt = nil; lock.unlock() }
+        var firstOutput: Date? { lock.lock(); defer { lock.unlock() }; return firstOutputAt }
         var snapshot: (Int, Int) { lock.lock(); defer { lock.unlock() }; return (toolCalls, errors) }
     }
     /// Permission engine for this session (nil in chat mode, which has no tools).
@@ -42,8 +48,9 @@ public final class AgentSession: @unchecked Sendable {
     directly, or instructions like "say X", reply in text without tools. When asked about the \
     project or its code, look before answering: list the directory and read the relevant files. \
     Reading is free of side effects, so never ask permission to explore; just do it and report \
-    what you found. Run one command per tool call and read its output before deciding the next \
-    step. Never use interactive commands. Be terse and concrete.
+    what you found. When you decide to use a tool, call it; do not describe the call in prose \
+    first. Run one command per tool call and read its output before deciding the next step. \
+    Never use interactive commands. Be terse and concrete.
     """
 
     /// Start a new session in `workspace` (tools run in `cwd`, which defaults to the workspace).
@@ -75,7 +82,7 @@ public final class AgentSession: @unchecked Sendable {
         self.activeSpec = spec == .auto ? await TierResolver.current().spec(for: .local) : spec
         let policy = record.mode == .code ? PolicyEngine(workspace: record.workspaceURL, cwd: record.cwdURL, level: record.permission) : nil
         self.policy = policy
-        let ctx = ToolContext(cwd: record.cwd, report: sink, policy: policy, approver: approver, sessionID: record.id)
+        let ctx = ToolContext(cwd: record.cwd, report: self.sink, policy: policy, approver: approver, sessionID: record.id)
         var tools: [any Tool] = record.mode == .chat ? [] : Tools.standard(ctx)
         if let mcp, record.mode == .code { tools += await mcp.tools(ctx: ctx) }
         self.toolNames = tools.map(\.name)
@@ -198,6 +205,13 @@ public final class AgentSession: @unchecked Sendable {
         return correctionCues.contains { l.hasPrefix($0) || l.contains(" " + $0) }
     }
 
+    /// A reply that ends by announcing work ("Let me check the files:", "I'll run the tests.") without doing it.
+    static func announcesAction(_ text: String) -> Bool {
+        guard let lastLine = text.split(separator: "\n").last?.trimmingCharacters(in: .whitespaces).lowercased(), !lastLine.isEmpty else { return false }
+        let cue = ["let me ", "let's ", "i'll ", "i will ", "i am going to", "i'm going to", "now i", "next, i", "first, i"].contains { lastLine.hasPrefix($0) }
+        return cue && (lastLine.hasSuffix(":") || lastLine.hasSuffix(".")) && !lastLine.contains("?")
+    }
+
     /// Run one user turn, streaming text deltas and tool events to the sink. Returns the final text.
     @discardableResult
     public func run(_ prompt: String, effort: Effort = .default) async throws -> String {
@@ -213,7 +227,7 @@ public final class AgentSession: @unchecked Sendable {
         }
         await routeIfAuto(prompt)
         let sent = await withMemory(prompt)
-        let text: String
+        var text: String
         do {
             text = try await runOnce(sent, effort: effort)
         } catch let error as LanguageModelSession.GenerationError {
@@ -227,6 +241,13 @@ public final class AgentSession: @unchecked Sendable {
             try await compact()
             text = try await runOnce(sent, effort: effort)
         }
+        // Small models sometimes narrate a tool call ("Let me examine the files:") and then end
+        // the turn without making it. Nudge once; the second pass usually acts.
+        if mode == .code, (counters?.snapshot.0 ?? 0) == 0, Self.announcesAction(text) {
+            sink(.info("the model announced tool use without calling a tool; asking it to continue"))
+            let more = try await runOnce("Continue: make the tool calls you just described. Do not repeat the plan.", effort: effort)
+            text += (more.isEmpty ? "" : "\n\n" + more)
+        }
         if record.turns == 1, record.title == "New session" { record.title = Self.title(from: prompt); if autosave { try? save() } }
         var log = RouteLog(turn: record.turns, prompt: String(prompt.prefix(200)), tier: spec == .auto ? lastRoute?.tier.rawValue : nil,
                            model: effectiveSpec.description, router: spec == .auto ? lastRoute?.router : nil,
@@ -235,6 +256,7 @@ public final class AgentSession: @unchecked Sendable {
         log.toolCalls = tc; log.errors = te
         log.tokensIn = lastTurnUsage?.input.totalTokenCount ?? 0; log.tokensOut = lastTurnUsage?.output.totalTokenCount ?? 0
         log.durationMs = Int(Date().timeIntervalSince(started) * 1000)
+        log.firstTokenMs = counters?.firstOutput.map { Int($0.timeIntervalSince(started) * 1000) }
         record.routes.append(log)
         if autosave { try? save() }
         await remember(prompt: prompt, response: text)
@@ -261,7 +283,10 @@ public final class AgentSession: @unchecked Sendable {
             if case .toolCalls(let c) = e { return c.map(\.toolName).joined(separator: ",") } else { return nil }
         }.joined(separator: " ")
         do {
-            let facts = try await MemoryExtractor.extract(prompt: prompt, response: response, toolSummary: tools)
+            var facts = try await MemoryExtractor.extract(prompt: prompt, response: response, toolSummary: tools)
+            // Without tool output the assistant's claims about the project are unverified (small
+            // models invent stacks and audits); keep only what the user themselves established.
+            if tools.isEmpty { facts = facts.filter { $0.scope == "user" || $0.kind == "preference" || $0.kind == "decision" } }
             if ProcessInfo.processInfo.environment["MLEX_DEBUG"] != nil { FileHandle.standardError.write(Data("[mlex] extracted: \(facts)\n".utf8)) }
             let added = try await MemoryStore.shared.add(facts, workspace: record.workspaceURL, source: record.id)
             if !added.isEmpty { sink(.info("remembered: " + added.map { ($0.scope == "user" ? "[you] " : "") + $0.text }.joined(separator: " · "))) }

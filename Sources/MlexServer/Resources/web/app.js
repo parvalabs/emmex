@@ -278,6 +278,7 @@ function routeBadge(turn) {
   b.append(el('span', 'm', r.model));
   if (r.tier) b.append(el('span', '', ` · ${r.tier}${r.confidence != null ? ' ' + Math.round(r.confidence * 100) + '%' : ''}`));
   b.append(el('span', '', ` · ${r.toolCalls} tools · ${(r.durationMs / 1000).toFixed(0)}s`));
+  if (r.firstTokenMs != null && r.tokensOut > 0 && r.durationMs > r.firstTokenMs) b.append(el('span', '', ` · first token ${(r.firstTokenMs / 1000).toFixed(1)}s · ${(r.tokensOut / ((r.durationMs - r.firstTokenMs) / 1000)).toFixed(0)} tok/s`));
   if (r.review) b.append(el('span', 'rv ' + r.review, ` · ${r.review}`));
   b.title = (r.reason || '') + (r.errors ? ` · ${r.errors} errors` : '');
   return b;

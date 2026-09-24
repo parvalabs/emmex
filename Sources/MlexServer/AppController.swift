@@ -88,7 +88,7 @@ public final class AppController {
             d["current"] = ["id": cur.record.id, "title": cur.record.title, "worktree": cur.record.worktree as Any, "model": cur.spec.description,
                             "effectiveModel": cur.effectiveSpec.description, "contextUsed": contextUsed, "contextSize": contextSize, "cwd": cur.cwd]
             d["routes"] = cur.record.routes.map { ["turn": $0.turn, "tier": $0.tier as Any, "model": $0.model, "confidence": $0.confidence as Any, "reason": $0.reason as Any,
-                                                   "toolCalls": $0.toolCalls, "errors": $0.errors, "tokensOut": $0.tokensOut, "durationMs": $0.durationMs, "review": $0.review as Any] }
+                                                   "toolCalls": $0.toolCalls, "errors": $0.errors, "tokensOut": $0.tokensOut, "durationMs": $0.durationMs, "firstTokenMs": $0.firstTokenMs as Any, "review": $0.review as Any] }
         } else { d["current"] = NSNull() }
         if let u = lastUsage { d["usage"] = ["input": u.input.totalTokenCount, "cached": u.input.cachedTokenCount, "output": u.output.totalTokenCount] }
         return d

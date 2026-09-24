@@ -15,6 +15,7 @@ public struct RouteLog: Codable, Sendable, Identifiable {
     public var tokensIn: Int = 0
     public var tokensOut: Int = 0
     public var durationMs: Int = 0
+    public var firstTokenMs: Int? = nil            // time to the first streamed token (prefill cost)
     public var followedByCorrection: Bool? = nil   // did the next user message look like a correction?
     public var review: String? = nil               // appropriate | over-routed | under-routed (from `sessions review`)
     public var reviewReason: String? = nil
