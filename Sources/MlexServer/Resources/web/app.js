@@ -9,6 +9,40 @@ async function act(a) {
   return r.json().catch(() => ({}));
 }
 
+function dialog(title, defaultValue = '') {
+  return new Promise((resolve) => {
+    const modal = el('div', 'modal');
+    const card = el('div', 'modal-card');
+    const h2 = el('h2');
+    h2.textContent = title;
+    const input = el('input', 'dialog-input');
+    input.type = 'text';
+    input.value = defaultValue;
+    const buttons = el('div', 'dialog-buttons');
+    const cancelBtn = el('button', 'dialog-btn', 'Cancel');
+    const okBtn = el('button', 'dialog-btn dialog-ok', 'OK');
+    buttons.append(cancelBtn, okBtn);
+    card.append(h2, input, buttons);
+    modal.append(card);
+    
+    const close = (value) => {
+      modal.remove();
+      resolve(value);
+    };
+    
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') close(input.value);
+      else if (e.key === 'Escape') close(null);
+    };
+    cancelBtn.onclick = () => close(null);
+    okBtn.onclick = () => close(input.value);
+    
+    document.body.append(modal);
+    input.focus();
+    input.select();
+  });
+}
+
 /* ---------- markdown (small, safe) ---------- */
 function esc(s) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function inline(s) {
@@ -110,7 +144,7 @@ function renderSessions() {
       if (s.worktree) r.append(el('span', 'wt', '⑂'));
       r.title = `${s.model} · ${s.turns} turns`; r.onclick = () => act({ type: 'resume', id: s.id });
       r.oncontextmenu = (ev) => { ev.preventDefault(); menu(ev.clientX, ev.clientY, [
-        { label: 'Rename…', run: () => { const t = prompt('Session title', s.title); if (t) act({ type: 'rename', id: s.id, title: t }); } },
+        { label: 'Rename…', run: () => { dialog('Session title', s.title).then(t => { if (t) act({ type: 'rename', id: s.id, title: t }); }); } },
         { label: 'Fork', run: () => act({ type: 'fork', id: s.id }) },
         ...(s.worktree ? [{ label: `Reveal worktree ${s.worktree}`, run: () => act({ type: 'reveal', id: s.id }) }] : []),
         { sep: true }, { label: 'Delete', danger: true, run: () => act({ type: 'delete_session', id: s.id }) }]); };
@@ -196,10 +230,10 @@ $('#perm-btn').onclick = (ev) => { ev.stopPropagation(); const r = $('#perm-btn'
     .map(([k, l, d]) => ({ label: l, sub: d, on: S.permission === k, run: () => act({ type: 'set_permission', permission: k }) }));
   items.push({ sep: true }, { label: S.trusted ? 'Untrust this workspace' : 'Trust this workspace (its scripts may run)', run: () => act({ type: 'set_trust', trusted: !S.trusted }) });
   menu(r.left, r.bottom + 4, items); };
-$('#new-worktree').onclick = () => { const b = prompt('Branch name for the worktree'); if (b) act({ type: 'new_session', worktree: b }); };
+$('#new-worktree').onclick = () => { dialog('Branch name for the worktree').then(b => { if (b) act({ type: 'new_session', worktree: b }); }); };
 $('#context').onclick = () => act({ type: 'compact' });
 $('#stop').onclick = () => act({ type: 'stop' });
-$('#title').ondblclick = () => { if (!S.current) return; const t = prompt('Session title', S.current.title); if (t) act({ type: 'rename', id: S.current.id, title: t }); };
+$('#title').ondblclick = () => { if (!S.current) return; dialog('Session title', S.current.title).then(t => { if (t) act({ type: 'rename', id: S.current.id, title: t }); }); };
 $('#open-models').onclick = openModels; $('#open-tools').onclick = openTools;
 
 /* ---------- composer ---------- */

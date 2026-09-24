@@ -56,8 +56,6 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## App
 
-- **Session rename and worktree prompts** (2026-09-23): use in-page dialogs instead of
-  `prompt()`.
 - **Loading state for MLX models** (2026-09-22): the picker shows a spinner; the
   timeline should say what is loading and how big it is.
 - **Silent exit on launch** (2026-09-22): seen twice in the SwiftUI era, never reproduced;
@@ -67,6 +65,8 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Done
 
+- In-page dialogs for session rename and worktree branch, implemented by mlex itself on Auto
+  (routed to Haiku, 15 tool calls, 25 s, no approvals needed; Opus review: appropriate) (`fe9a16d`).
 - Routing log per turn with outcome signals, `sessions routes`, Opus reviewer, badges in the app (`3d160da`).
 
 - Feasibility spikes: transcript rewrite, Claude prompt caching, MLX bridge (`docs/FEASIBILITY.md`).
