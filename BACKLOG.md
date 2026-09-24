@@ -48,12 +48,6 @@ that closed them rather than deleting them. Dates are when the item was added.
   serve Claude or Nova; a Converse-based `LanguageModel` would, or route through LiteLLM.
 - **Memory retrieval quality** (2026-09-23): Apple's sentence embedding separates short
   facts only by ~0.15 cosine; if merges misfire in practice, try an MLX embedding model.
-- **KV-cache reuse for MLX turns** (2026-09-23): the MLXFoundationModels bridge re-prefills the
-  whole transcript on every turn. Measured on an M4 (10-core GPU) with Qwen3-8B-4bit: ~170 tok/s
-  prefill, so a 6K-token session waits 35 s before the first token of every reply, and ~18 tok/s
-  generation. MLXLMCommon has `PromptCacheReusePolicy` and a `ChatSession` prompt cache; either
-  upstream prefix reuse into the bridge or run MLX through our own executor that keeps the KV
-  cache between turns. Until then, recommend Qwen3-4B or smaller on base-M4 machines.
 - **Compaction summaries** (2026-09-22): the 3B model's summaries are shallow; consider
   the frontier model for the fold when the session is already on one.
 
@@ -75,6 +69,8 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Done
 
+- **KV-cache reuse for MLX turns** (2026-09-24, `71b6820`): vendored mlx-swift-lm with a prefix-cache
+  patch in the FoundationModels adapter. Qwen3-8B at 7.4K context: first output 48 s → 3 s.
 - Collapsed tool-call groups with counts and a line-diff view for edits in the web UI, after two
   dogfood sessions made 15-step timelines hard to read (`6321928`).
 - Router escalation floor after a dogfood session sent a concurrency fix to Haiku (Opus review:
