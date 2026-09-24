@@ -32,6 +32,9 @@ See `docs/FEASIBILITY.md` for the spike results that shaped the design.
   on-device classifier, or by TypeSafe Jev with `"router": "jev"` in `~/.mlex/settings.json`
   and a key in Keychain service `mlex-jev`. Tiers map to specs in `settings.json` `routes`
   (default `system`, `claude:haiku`, `claude:sonnet5`) with fallback when a backend is missing.
+  A deterministic floor raises the tier for judgment work (races, debugging, design, security,
+  tradeoffs), multi-step edits, and questions about code, since a small classifier under-routes
+  those. `mlex route -- "<prompt>"` shows the decision without running anything.
 - **Routing log**: every turn records which tier and model answered, the router's confidence
   and reason, tool calls, errors, tokens, duration, and whether your next message looked like
   a correction. `mlex sessions routes <id>` prints it; badges under each message show it in the

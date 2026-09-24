@@ -28,6 +28,41 @@ enum TierGuide {
     static let frontier = "anything needing real reasoning or judgment: debugging, design decisions, multi-file refactors, ambiguous or high-stakes requests, writing substantial new code"
 }
 
+/// Deterministic floors applied after any router: a small classifier under-escalates judgment
+/// work (a concurrency fix went to the cheap tier at 90% confidence), so signals that reliably
+/// mean reasoning or multi-step editing raise the minimum tier. Floors only raise, never lower.
+public enum RoutingFloor {
+    static let frontierCues = ["race", "concurren", "deadlock", "thread", "debug", "root cause", "why does", "why is", "crash", "intermittent", "flaky",
+                               "design", "architect", "migrat", "security", "vulnerab", "performance", "optimi", "tradeoff", "trade-off",
+                               "without introducing", "without breaking", "make sure nothing", "edge case", "backward", "correctness", "invariant"]
+    static let editCues = ["fix", "change", "replace", "add", "remove", "implement", "update", "rewrite", "rename", "move", "create", "write", "edit", "delete", "refactor"]
+    static let codeCues = [".swift", ".js", ".ts", ".py", ".css", ".html", ".json", ".md", "sources/", "src/", "function", "func ", "class ", "struct "]
+
+    public static func minimumTier(for prompt: String) -> (Tier, String)? {
+        let l = prompt.lowercased()
+        if let cue = frontierCues.first(where: { l.contains($0) }) { return (.frontier, "judgment cue: \(cue)") }
+        let sentences = l.split(whereSeparator: { ".!?\n".contains($0) }).filter { $0.trimmingCharacters(in: .whitespaces).count > 3 }
+        let editVerbs = editCues.filter { c in sentences.contains { $0.trimmingCharacters(in: .whitespaces).hasPrefix(c) || $0.contains(" " + c + " ") } }.count
+        let touchesCode = codeCues.contains { l.contains($0) }
+        let multiStep = l.contains(" then ") || l.contains(" also ") || l.contains(" and run") || l.contains(" and then") || l.contains("; ") || sentences.count >= 3
+        if editVerbs >= 1 && multiStep { return (.cheap, "multi-step change") }
+        if touchesCode && editVerbs >= 1 { return (.cheap, "code change") }
+        // Questions about identifiers in the codebase need the source read, not a guess.
+        if prompt.range(of: #"\b[A-Z][a-z]+[A-Z][A-Za-z]+\b"#, options: .regularExpression) != nil || ["what does", "how does", "where is", "explain"].contains(where: { l.contains($0) }) && (touchesCode || l.contains(" type") || l.contains(" class") || l.contains(" function") || l.contains(" module")) {
+            return (.cheap, "question about code")
+        }
+        if prompt.count > 600 { return (.cheap, "long request") }
+        return nil
+    }
+
+    static let order: [Tier] = [.local, .cheap, .frontier]
+    public static func apply(_ d: RouteDecision, prompt: String) -> RouteDecision {
+        guard let (min, why) = minimumTier(for: prompt), order.firstIndex(of: min)! > order.firstIndex(of: d.tier)! else { return d }
+        var e = d; e.tier = min; e.reason = "escalated (\(why)); router said \(d.tier.rawValue): \(d.reason)"; e.confidence = max(d.confidence, 0.8)
+        return e
+    }
+}
+
 /// Apple's on-device model as the classifier: guided generation with an enum, so the output is
 /// always one of the tiers. About one to two seconds per decision, offline.
 public struct OnDeviceRouter: Router {
@@ -55,7 +90,7 @@ public struct OnDeviceRouter: Router {
         let confidence: Double = ["low": 0.4, "medium": 0.7, "high": 0.9][conf] ?? 0.4
         // A small model's low-confidence "local" is the dangerous case; escalate one step.
         if confidence < 0.5, tier == .local { tier = .cheap }
-        return .init(tier: tier, reason: reason, confidence: confidence, router: "ondevice")
+        return RoutingFloor.apply(.init(tier: tier, reason: reason, confidence: confidence, router: "ondevice"), prompt: req.prompt)
     }
 }
 
@@ -92,7 +127,7 @@ public struct JevRouter: Router {
             throw MlexError.modelUnavailable("jev: unexpected response \(String(decoding: data.prefix(200), as: UTF8.self))")
         }
         let probs = t["probabilities"] as? [String: Double] ?? [:]
-        return .init(tier: tier, reason: probs.map { "\($0.key) \(Int($0.value * 100))%" }.sorted().joined(separator: ", "), confidence: probs[choice] ?? 0.5, router: "jev")
+        return RoutingFloor.apply(.init(tier: tier, reason: probs.map { "\($0.key) \(Int($0.value * 100))%" }.sorted().joined(separator: ", "), confidence: probs[choice] ?? 0.5, router: "jev"), prompt: req.prompt)
     }
 }
 

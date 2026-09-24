@@ -11,7 +11,7 @@ import MlexServer
     }
     static let configuration = CommandConfiguration(
         abstract: "mlex: local-first agent on Apple Foundation Models, MLX models, and Claude.",
-        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self, MemoryCmd.self, Serve.self, Trust.self, Policy.self, SandboxCmd.self],
+        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self, MemoryCmd.self, Serve.self, Trust.self, Policy.self, SandboxCmd.self, RouteCmd.self],
         defaultSubcommand: Chat.self)
 }
 
@@ -244,6 +244,19 @@ struct Policy: AsyncParsableCommand {
         case .ask(let why): print("ASK    \(why)")
         }
         print("always-allow suggestion: \(PolicyEngine.alwaysPattern(for: cmd))")
+    }
+}
+
+// MARK: route (debug)
+
+struct RouteCmd: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "route", abstract: "Debug: show how the router would tier a prompt, without running it.")
+    @Argument(parsing: .remaining) var prompt: [String]
+    func run() async throws {
+        let p = prompt.joined(separator: " ")
+        let d = try await TierResolver.makeRouter().route(.init(prompt: p, recent: "", tools: []))
+        let spec = await TierResolver.current().spec(for: d.tier)
+        print("\(d.tier.rawValue) → \(spec)  (\(d.router), \(Int(d.confidence * 100))%) \(d.reason)")
     }
 }
 

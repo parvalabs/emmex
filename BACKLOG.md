@@ -33,9 +33,6 @@ that closed them rather than deleting them. Dates are when the item was added.
   patterns that force asking.
 - **MCP tool gating** (2026-09-23): only name heuristics (`write`, `delete`, `run`…). Use
   MCP tool annotations (readOnlyHint / destructiveHint) when servers provide them.
-- **Router under-escalation** (2026-09-22): the on-device router chose `local` at 70% for a
-  two-step edit-plus-git request and the 3B model wrote to the wrong path. Escalate when a
-  prompt implies multiple tool calls, or route with Jev.
 
 ## Harness
 
@@ -65,6 +62,9 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Done
 
+- Router escalation floor after a dogfood session sent a concurrency fix to Haiku (Opus review:
+  under-routed): judgment cues raise to frontier, multi-step edits and code questions to cheap;
+  `mlex route -- "<prompt>"` shows decisions (`50ff930`).
 - In-page dialogs for session rename and worktree branch, implemented by mlex itself on Auto
   (routed to Haiku, 15 tool calls, 25 s, no approvals needed; Opus review: appropriate) (`fe9a16d`).
 - Routing log per turn with outcome signals, `sessions routes`, Opus reviewer, badges in the app (`3d160da`).
