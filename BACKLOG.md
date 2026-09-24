@@ -67,6 +67,8 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Done
 
+- Routing log per turn with outcome signals, `sessions routes`, Opus reviewer, badges in the app (`3d160da`).
+
 - Feasibility spikes: transcript rewrite, Claude prompt caching, MLX bridge (`docs/FEASIBILITY.md`).
 - Core, CLI, sessions, worktrees, MCP, skills, templates, context files, compaction (`64b7a9c`…`42616e4`).
 - Web UI served by the app; WKWebView shell (`5810bfb`, `1b7b883`).

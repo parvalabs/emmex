@@ -10,6 +10,21 @@ public final class AgentSession: @unchecked Sendable {
     /// Whether turns are saved to the session store after each response.
     public var autosave = true
     private let sink: EventSink
+    private var counters: CounterBox?
+    final class CounterBox: @unchecked Sendable {
+        var toolCalls = 0, errors = 0
+        let lock = NSLock()
+        func note(_ ev: AgentEvent) {
+            lock.lock(); defer { lock.unlock() }
+            switch ev {
+            case .toolCall: toolCalls += 1
+            case .toolResult(_, let out): if (out.hasPrefix("exit=") && !out.hasPrefix("exit=0")) || out.hasPrefix("error") || out.hasPrefix("denied") { errors += 1 }
+            default: break
+            }
+        }
+        func reset() { lock.lock(); toolCalls = 0; errors = 0; lock.unlock() }
+        var snapshot: (Int, Int) { lock.lock(); defer { lock.unlock() }; return (toolCalls, errors) }
+    }
     /// Permission engine for this session (nil in chat mode, which has no tools).
     public private(set) var policy: PolicyEngine?
     private var approver: Approver?
@@ -48,9 +63,13 @@ public final class AgentSession: @unchecked Sendable {
         var record = record
         let spec = spec ?? record.spec
         record.model = spec.description
-        self.spec = spec; self.cwd = record.cwd; self.sink = sink; self.record = record
+        self.spec = spec; self.cwd = record.cwd; self.record = record
         self.mcpHost = mcp
         self.approver = approver
+        // Count tool calls and errors per turn for the routing log before forwarding events.
+        let box = CounterBox()
+        self.counters = box
+        self.sink = { ev in box.note(ev); sink(ev) }
         self.activeSpec = spec == .auto ? await TierResolver.current().spec(for: .local) : spec
         let policy = record.mode == .code ? PolicyEngine(workspace: record.workspaceURL, cwd: record.cwdURL, level: record.permission) : nil
         self.policy = policy
@@ -105,6 +124,7 @@ public final class AgentSession: @unchecked Sendable {
     public var autoCompact = true
     /// Input tokens reported by the last response, the best context estimate for cloud/MLX models.
     public private(set) var lastInputTokens: Int?
+    private var lastTurnUsage: LanguageModelSession.Usage?
     /// For `auto` sessions: the concrete model currently running and the last routing decision.
     public private(set) var activeSpec: ModelSpec
     public private(set) var lastRoute: RouteDecision?
@@ -164,9 +184,21 @@ public final class AgentSession: @unchecked Sendable {
         return summary
     }
 
+    static let correctionCues = ["no,", "no.", "not that", "that's wrong", "that is wrong", "wrong", "actually", "instead", "undo", "revert", "i meant", "i said", "again", "didn't ask", "did not ask", "try again", "not what"]
+    static func looksLikeCorrection(_ prompt: String) -> Bool {
+        let l = prompt.lowercased().trimmingCharacters(in: .whitespaces)
+        return correctionCues.contains { l.hasPrefix($0) || l.contains(" " + $0) }
+    }
+
     /// Run one user turn, streaming text deltas and tool events to the sink. Returns the final text.
     @discardableResult
     public func run(_ prompt: String, effort: Effort = .default) async throws -> String {
+        // Outcome signal for the previous turn: does this prompt read like a correction?
+        if let last = record.routes.indices.last, record.routes[last].followedByCorrection == nil {
+            record.routes[last].followedByCorrection = Self.looksLikeCorrection(prompt)
+        }
+        let started = Date()
+        counters?.reset()
         if autoCompact {
             let (needed, used, size) = await Compactor.shouldCompact(session: session, spec: effectiveSpec, lastInputTokens: lastInputTokens)
             if needed, try await compact() == nil { sink(.info("context \(used)/\(size) tokens; nothing old enough to compact yet")) }
@@ -188,6 +220,15 @@ public final class AgentSession: @unchecked Sendable {
             text = try await runOnce(sent, effort: effort)
         }
         if record.turns == 1, record.title == "New session" { record.title = Self.title(from: prompt); if autosave { try? save() } }
+        var log = RouteLog(turn: record.turns, prompt: String(prompt.prefix(200)), tier: spec == .auto ? lastRoute?.tier.rawValue : nil,
+                           model: effectiveSpec.description, router: spec == .auto ? lastRoute?.router : nil,
+                           confidence: spec == .auto ? lastRoute?.confidence : nil, reason: spec == .auto ? lastRoute?.reason : nil)
+        let (tc, te) = counters?.snapshot ?? (0, 0)
+        log.toolCalls = tc; log.errors = te
+        log.tokensIn = lastTurnUsage?.input.totalTokenCount ?? 0; log.tokensOut = lastTurnUsage?.output.totalTokenCount ?? 0
+        log.durationMs = Int(Date().timeIntervalSince(started) * 1000)
+        record.routes.append(log)
+        if autosave { try? save() }
         await remember(prompt: prompt, response: text)
         return text
     }
@@ -240,6 +281,7 @@ public final class AgentSession: @unchecked Sendable {
             usage = snapshot.usage
         }
         if let u = usage, u.input.totalTokenCount > 0 { lastInputTokens = u.input.totalTokenCount + u.output.totalTokenCount }
+        lastTurnUsage = usage
         sink(.finished(usage: usage, text: last))
         record.turns += 1
         record.effort = effort

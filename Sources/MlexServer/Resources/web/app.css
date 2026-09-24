@@ -162,3 +162,7 @@ input.text:focus { border-color: var(--accent); }
 .approval .acts { display: flex; gap: 6px; justify-content: flex-end; }
 .audit { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); margin-left: 32px; margin-top: -10px; }
 .audit .ok { color: var(--ok); } .audit .no { color: var(--err); }
+
+.routebadge { align-self: flex-end; font-size: 10.5px; color: var(--faint); margin-top: -12px; cursor: default; }
+.routebadge .m { color: var(--muted); font-weight: 500; }
+.routebadge .rv.appropriate { color: var(--ok); } .routebadge .rv.over-routed, .routebadge .rv.under-routed { color: var(--warn); }

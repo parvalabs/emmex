@@ -32,6 +32,11 @@ See `docs/FEASIBILITY.md` for the spike results that shaped the design.
   on-device classifier, or by TypeSafe Jev with `"router": "jev"` in `~/.mlex/settings.json`
   and a key in Keychain service `mlex-jev`. Tiers map to specs in `settings.json` `routes`
   (default `system`, `claude:haiku`, `claude:sonnet5`) with fallback when a backend is missing.
+- **Routing log**: every turn records which tier and model answered, the router's confidence
+  and reason, tool calls, errors, tokens, duration, and whether your next message looked like
+  a correction. `mlex sessions routes <id>` prints it; badges under each message show it in the
+  app; `mlex sessions review <id> [--model claude:opus5_5]` asks a strong model to judge each
+  turn as appropriate, over-routed, or under-routed and stores the verdicts.
 - **Memory**: after each turn the on-device model extracts durable facts (preferences, decisions,
   project facts, references), scoped to the project or to you (user-level facts apply in every
   workspace). Retrieval uses Apple's on-device sentence embeddings plus keyword overlap, so a

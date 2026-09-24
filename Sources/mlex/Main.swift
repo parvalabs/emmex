@@ -85,7 +85,42 @@ struct Models: AsyncParsableCommand {
 
 struct Sessions: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "sessions", abstract: "List or delete saved sessions.",
-                                                    subcommands: [List.self, Delete.self, Inspect.self, Fork.self, Export.self], defaultSubcommand: List.self)
+                                                    subcommands: [List.self, Delete.self, Inspect.self, Fork.self, Export.self, Routes.self, Review.self], defaultSubcommand: List.self)
+    struct Routes: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Show which model answered each turn and how it went.")
+        @Argument var id: String
+        func run() async throws {
+            guard let r = try SessionStore.find(id) else { throw ValidationError("no session matching \(id)") }
+            if r.routes.isEmpty { print("no routing log (session predates routing logs or has no turns)"); return }
+            func pad(_ s: String, _ n: Int) -> String { s.count >= n ? String(s.prefix(n)) : s.padding(toLength: n, withPad: " ", startingAt: 0) }
+            print("turn tier     model                   conf tools errs   out  time corr review        prompt")
+            for x in r.routes {
+                let conf = x.confidence.map { String(format: "%3d%%", Int($0 * 100)) } ?? "   -"
+                let corr = x.followedByCorrection == true ? "YES" : (x.followedByCorrection == false ? "no" : "-")
+                print("\(pad(String(x.turn), 4)) \(pad(x.tier ?? "fixed", 8)) \(pad(x.model, 23)) \(conf) \(pad(String(x.toolCalls), 5)) \(pad(String(x.errors), 4)) \(pad(String(x.tokensOut), 5)) \(pad("\(x.durationMs / 1000)s", 5)) \(pad(corr, 4)) \(pad(x.review ?? "-", 13)) \(x.prompt.prefix(48).replacingOccurrences(of: "\n", with: " "))")
+                if let why = x.reason, !why.isEmpty { print("      router: \(why)") }
+                if let rr = x.reviewReason, !rr.isEmpty { print("      review: \(rr)") }
+            }
+        }
+    }
+    struct Review: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Ask a strong model whether each turn's tier was appropriate; stores verdicts on the session.")
+        @Argument var id: String
+        @Option(name: .long, help: "Reviewer model spec (default claude:opus5_5).") var model: String = "claude:opus5_5"
+        func run() async throws {
+            guard var r = try SessionStore.find(id) else { throw ValidationError("no session matching \(id)") }
+            guard !r.routes.isEmpty else { print("no routing log to review"); return }
+            let verdicts = try await RouteReviewer.review(r, with: try ModelSpec(parsing: model))
+            var counts: [String: Int] = [:]
+            for v in verdicts {
+                if let i = r.routes.firstIndex(where: { $0.turn == v.turn }) { r.routes[i].review = v.verdict; r.routes[i].reviewReason = v.reason }
+                counts[v.verdict, default: 0] += 1
+                print("turn \(v.turn): \(v.verdict) — \(v.reason)")
+            }
+            try SessionStore.save(r)
+            print("summary: " + counts.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", "))
+        }
+    }
     struct Fork: AsyncParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Copy a session into a new one, optionally cut before a user turn.")
         @Argument var id: String

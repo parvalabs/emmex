@@ -1,6 +1,29 @@
 import Foundation
 import FoundationModels
 
+/// One turn's routing decision and outcome, kept for later review.
+public struct RouteLog: Codable, Sendable, Identifiable {
+    public var turn: Int
+    public var prompt: String            // excerpt
+    public var tier: String?             // local | cheap | frontier, nil when the model was fixed
+    public var model: String             // concrete spec that answered
+    public var router: String?           // ondevice | jev | nil
+    public var confidence: Double?
+    public var reason: String?
+    public var toolCalls: Int = 0
+    public var errors: Int = 0
+    public var tokensIn: Int = 0
+    public var tokensOut: Int = 0
+    public var durationMs: Int = 0
+    public var followedByCorrection: Bool? = nil   // did the next user message look like a correction?
+    public var review: String? = nil               // appropriate | over-routed | under-routed (from `sessions review`)
+    public var reviewReason: String? = nil
+    public var id: Int { turn }
+    public init(turn: Int, prompt: String, tier: String?, model: String, router: String?, confidence: Double?, reason: String?) {
+        self.turn = turn; self.prompt = prompt; self.tier = tier; self.model = model; self.router = router; self.confidence = confidence; self.reason = reason
+    }
+}
+
 /// A saved conversation. The transcript is the framework's own type, so resuming is exact.
 public struct SessionRecord: Codable, Identifiable, Sendable {
     public var id: String
@@ -16,8 +39,9 @@ public struct SessionRecord: Codable, Identifiable, Sendable {
     public var transcript: Transcript
     public var mode: SessionMode = .code
     public var permission: PermissionLevel = .smart
+    public var routes: [RouteLog] = []
 
-    enum CodingKeys: String, CodingKey { case id, workspace, cwd, worktree, title, model, effort, createdAt, updatedAt, turns, transcript, mode, permission }
+    enum CodingKeys: String, CodingKey { case id, workspace, cwd, worktree, title, model, effort, createdAt, updatedAt, turns, transcript, mode, permission, routes }
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id); workspace = try c.decode(String.self, forKey: .workspace); cwd = try c.decode(String.self, forKey: .cwd)
@@ -25,6 +49,7 @@ public struct SessionRecord: Codable, Identifiable, Sendable {
         effort = try c.decodeIfPresent(Effort.self, forKey: .effort) ?? .default; createdAt = try c.decode(Date.self, forKey: .createdAt); updatedAt = try c.decode(Date.self, forKey: .updatedAt)
         turns = try c.decode(Int.self, forKey: .turns); transcript = try c.decode(Transcript.self, forKey: .transcript)
         mode = try c.decodeIfPresent(SessionMode.self, forKey: .mode) ?? .code; permission = try c.decodeIfPresent(PermissionLevel.self, forKey: .permission) ?? .smart
+        routes = try c.decodeIfPresent([RouteLog].self, forKey: .routes) ?? []
     }
 
     public init(workspace: URL, cwd: URL, worktree: String? = nil, model: ModelSpec, effort: Effort = .default, mode: SessionMode = .code, permission: PermissionLevel = .smart) {

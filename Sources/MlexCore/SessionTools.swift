@@ -35,9 +35,17 @@ public enum SessionExport {
             segs.compactMap { if case .text(let t) = $0 { t.content } else if case .structure(let s) = $0 { s.content.jsonString } else { nil } }.joined()
         }
         var body = ""
+        var turn = 0
+        let routes = Dictionary(uniqueKeysWithValues: r.routes.map { ($0.turn, $0) })
         for e in r.transcript {
             switch e {
-            case .prompt(let p): body += "<div class=\"user\"><pre>\(esc(text(p.segments)))</pre></div>\n"
+            case .prompt(let p):
+                let t = text(p.segments)
+                if !t.hasPrefix("Summary of the conversation") { turn += 1 }
+                body += "<div class=\"user\"><pre>\(esc(t))</pre></div>\n"
+                if let x = routes[turn] {
+                    body += "<div class=\"route\">→ \(esc(x.model))\(x.tier.map { " · \(esc($0))" } ?? "")\(x.confidence.map { String(format: " · %d%%", Int($0 * 100)) } ?? "")\(x.reason.map { " · \(esc($0))" } ?? "")\(x.review.map { " · review: \(esc($0))" } ?? "")</div>\n"
+                }
             case .response(let x): body += "<div class=\"assistant\"><pre>\(esc(text(x.segments)))</pre></div>\n"
             case .toolCalls(let c): for call in c { body += "<div class=\"tool\">⚙ <b>\(esc(call.toolName))</b> <code>\(esc(String(call.arguments.jsonString.prefix(400))))</code></div>\n" }
             case .toolOutput(let o): body += "<details class=\"out\"><summary>\(esc(o.toolName)) output</summary><pre>\(esc(text(o.segments)))</pre></details>\n"
@@ -53,6 +61,7 @@ public enum SessionExport {
         h1{font-size:18px}.meta{color:#888;font-size:12px;margin-bottom:24px}
         .user{background:#eef2ff;border-radius:10px;padding:8px 12px;margin:16px 0 8px 80px}
         .assistant{margin:8px 80px 16px 0}.tool{font-size:12px;color:#666;margin:6px 0}
+        .route{font-size:11px;color:#888;text-align:right;margin:2px 0 6px}
         .out{font-size:12px;margin:4px 0 8px 18px}.out pre{background:#f5f5f7;padding:8px;border-radius:6px;overflow:auto}
         pre{white-space:pre-wrap;word-break:break-word;margin:0;font:inherit}code{font-family:ui-monospace,Menlo,monospace;font-size:12px}
         </style></head><body>

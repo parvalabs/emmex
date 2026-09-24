@@ -77,11 +77,22 @@ function renderTimeline() {
     [[S.tools.length, 'tools'], [S.skills.length, 'skills'], [S.mcp.length, 'MCP servers'], [S.memory.length, 'memories']].forEach(([n, l]) => st.append(el('span', 'stat', `${n} ${l}`)));
     em.append(st); t.append(em);
   }
-  for (const it of S.timeline) { const e = renderItem(it); items.set(it.id, e); t.append(e); }
+  for (const it of S.timeline) { const e = renderItem(it); items.set(it.id, e); t.append(e); if (it.kind === 'user' && it.userTurn) { const b = routeBadge(it.userTurn); if (b) t.append(b); } }
   if (S.busy) { const th = el('div', 'thinking'); th.append(el('span', 'dot'), el('span', '', 'Thinking…')); th.id = 'thinking'; t.append(th); }
   scrollBottom();
 }
 function scrollBottom() { const s = $('#scroll'); s.scrollTop = s.scrollHeight; }
+
+function routeBadge(turn) {
+  const r = (S.routes || []).find(x => x.turn === turn); if (!r) return null;
+  const b = el('div', 'routebadge');
+  b.append(el('span', 'm', r.model));
+  if (r.tier) b.append(el('span', '', ` · ${r.tier}${r.confidence != null ? ' ' + Math.round(r.confidence * 100) + '%' : ''}`));
+  b.append(el('span', '', ` · ${r.toolCalls} tools · ${(r.durationMs / 1000).toFixed(0)}s`));
+  if (r.review) b.append(el('span', 'rv ' + r.review, ` · ${r.review}`));
+  b.title = (r.reason || '') + (r.errors ? ` · ${r.errors} errors` : '');
+  return b;
+}
 
 /* ---------- sidebar ---------- */
 function bucket(ms) { const d = new Date(ms), now = new Date(); const day = 864e5;
@@ -277,7 +288,7 @@ function openTools() {
 
 /* ---------- events ---------- */
 function applyState(s) {
-  const structural = !S || S.timeline.length !== s.timeline.length || !S.current || !s.current || S.current.id !== s.current.id || S.busy !== s.busy || S.mode !== s.mode;
+  const structural = !S || S.timeline.length !== s.timeline.length || !S.current || !s.current || S.current.id !== s.current.id || S.busy !== s.busy || S.mode !== s.mode || (S.routes || []).length !== (s.routes || []).length;
   S = s; renderSessions(); renderChrome(); renderPulls();
   if (structural) renderTimeline();
 }
