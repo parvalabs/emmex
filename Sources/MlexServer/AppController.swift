@@ -30,6 +30,7 @@ public final class AppController {
 
     // Model + effort
     var selected: ModelSpec = .system
+    var pendingSpec: ModelSpec?  // spec to apply after current load completes
     var effort: Effort = .default
     var backends: [Backends.Status] = []
     var loadingID: String?, residentID: String?
@@ -228,7 +229,7 @@ public final class AppController {
     func select(_ spec: ModelSpec) {
         guard spec != selected else { return }
         selected = spec
-        guard let cur = current else { push(); return }
+        guard let cur = current else { pendingSpec = spec; push(); return }
         try? cur.save(); current = nil; push()
         Task { await load { try await AgentSession(record: cur.record, spec: spec, mcp: self.mcp, approver: self.approver, sink: self.sink) } }
     }
@@ -285,7 +286,15 @@ public final class AppController {
         loadingID = nil
         await refreshModels()
         if let ws = workspace { sessions = SessionStore.list(workspace: ws) }
-        if let p = pending, current != nil { pending = nil; busy = false; send(p) } else { busy = false; push() }
+        // Apply pending spec if one was selected during loading
+        if let pending = pendingSpec, current != nil {
+            pendingSpec = nil
+            let record = current!.record
+            try? current?.save(); current = nil; push()
+            Task { await load { try await AgentSession(record: record, spec: pending, mcp: self.mcp, approver: self.approver, sink: self.sink) } }
+        } else {
+            if let p = pending, current != nil { pending = nil; busy = false; send(p) } else { busy = false; push() }
+        }
     }
 
     private func updateContext() async {
