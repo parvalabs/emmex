@@ -17,27 +17,17 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Safety
 
-- **Proxy-enforced network** (2026-09-23, from srt/Codex): head-of-command network gating is
-  bypassable (`sh -c`, python sockets). Replace with Seatbelt rules allowing only
-  `localhost:<proxy>` egress, steer via `HTTP(S)_PROXY`, and filter domains and resolved IPs
-  (block loopback, link-local, cloud metadata) in a host proxy. Decide on `trustd.agent` for
-  Go TLS (`gh`, `terraform`).
-- **Default-deny profile** (2026-09-23, from srt/Codex/Cursor): ours is default-allow with
-  denies. Move to `(deny default)` with an enumerated allow list (process-exec/fork, sysctls,
-  mach services, /dev nodes) once the proxy exists; expect breakage to shake out.
-- **Protect self-executing config** (2026-09-23): beyond `.git/hooks` and `.mlex`, deny writes
-  to `.git/config`, `.gitconfig`, `.gitmodules`, shell rc files, `.mcp.json`, `.vscode`,
-  `.idea`, `.claude/*`, in literal and `**/name` forms.
-- **Ancestor rename guard** (2026-09-23, from Codex): `mv .git .git2 && mkdir .git/hooks`
-  sidesteps subpath denies; add `(deny file-write-unlink (require-all (vnode-type DIRECTORY)
-  ...))` for ancestors of protected paths, plus `(deny system-fcntl (fcntl-command 80 110))`.
-- **Per-session `$TMPDIR`** (2026-09-23, from Claude Code): the only writable temp, instead of
-  all of `/private/tmp` and `/var/folders`.
-- **Violation reporting and gated unsandboxed retry** (2026-09-23): read Seatbelt denials
-  from `log stream` tagged per command and show them to the model and user; replace the
-  blanket SwiftPM `--disable-sandbox` with an approval-gated retry.
-- **Sandbox for MCP servers** (2026-09-23): no harness does this by default; srt can wrap a
-  stdio server. Wrap ours the same way with a per-server network setting.
+- **Kernel violation log** (2026-09-23): Seatbelt denials could not be read from the unified
+  log on macOS 27 (neither `log show` predicates nor `(trace)` produced entries); today the
+  tool only detects "Operation not permitted" in output. Find the right subsystem or use a
+  `(deny default (with message …))` variant if it logs.
+- **Per-user temp is shared across sessions** (2026-09-23): swiftc and xcrun write to the
+  per-user `DARWIN_USER_TEMP_DIR`/`CACHE_DIR` regardless of `$TMPDIR`, so those stay writable
+  (mode 700, but shared between mlex sessions). `/tmp` itself is closed.
+- **Proxy auth fallback** (2026-09-23): git sends no proxy credentials until challenged, so
+  unauthenticated proxy requests use the most recently registered policy; with concurrent
+  commands the attribution can be wrong. Issue a 407 challenge instead.
+
 - **Shell AST parsing** (2026-09-23): text-based splitting misses `git -C .. push`-style
   evasions; OpenCode uses tree-sitter-bash. Consider a real parser or, cheaper, more opaque
   patterns that force asking.

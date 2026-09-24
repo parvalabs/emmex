@@ -27,8 +27,9 @@ public struct ToolContext: Sendable {
     public var maxOutput: Int
     public var policy: PolicyEngine?
     public var approver: Approver?
-    public init(cwd: String, maxOutput: Int = 4000, report: @escaping EventSink = { _ in }, policy: PolicyEngine? = nil, approver: Approver? = nil) {
-        self.cwd = cwd; self.maxOutput = maxOutput; self.report = report; self.policy = policy; self.approver = approver
+    public var sessionID: String = "default"
+    public init(cwd: String, maxOutput: Int = 4000, report: @escaping EventSink = { _ in }, policy: PolicyEngine? = nil, approver: Approver? = nil, sessionID: String = "default") {
+        self.cwd = cwd; self.maxOutput = maxOutput; self.report = report; self.policy = policy; self.approver = approver; self.sessionID = sessionID
     }
 
     /// Gate a side-effecting call. Returns nil when it may proceed, else the text to hand back

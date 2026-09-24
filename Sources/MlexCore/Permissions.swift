@@ -56,6 +56,8 @@ public actor PolicyEngine {
     }
 
     public func setLevel(_ l: PermissionLevel) { level = l }
+    /// Extra network domains granted for this workspace (from .mlex/permissions.json).
+    public var allowedDomains: [String] { AllowList.loadDomains(workspace: workspace) }
     public func recordCreated(_ path: String) { created.insert(Self.canonical(path)) }
     public func addAllowPattern(_ p: String) {
         let head = Self.basename(p.split(separator: " ").first.map(String.init) ?? "")
@@ -271,11 +273,18 @@ public actor PolicyEngine {
     /// resolve its nearest existing ancestor and re-append the rest, so a new file inside a
     /// symlinked workspace (/tmp → /private/tmp) still compares equal to the workspace.
     static func canonical(_ p: String) -> String {
+        // Foundation's resolvingSymlinksInPath deliberately keeps /tmp and /var unresolved; the
+        // kernel (and Seatbelt) see /private/tmp and /private/var, so use realpath(3).
+        func real(_ path: String) -> String {
+            guard let r = realpath(path, nil) else { return path }
+            defer { free(r) }
+            return String(cString: r)
+        }
         let url = URL(fileURLWithPath: p).standardizedFileURL
-        if FileManager.default.fileExists(atPath: url.path) { return url.resolvingSymlinksInPath().path }
+        if FileManager.default.fileExists(atPath: url.path) { return real(url.path) }
         var dir = url.deletingLastPathComponent(); var tail = [url.lastPathComponent]
         while !FileManager.default.fileExists(atPath: dir.path), dir.path != "/" { tail.insert(dir.lastPathComponent, at: 0); dir = dir.deletingLastPathComponent() }
-        return tail.reduce(dir.resolvingSymlinksInPath()) { $0.appending(path: $1) }.path
+        return tail.reduce(URL(fileURLWithPath: real(dir.path))) { $0.appending(path: $1) }.path
     }
 
     /// Allow rules must cover every subcommand of a compound command (deny/ask match any).
@@ -298,9 +307,14 @@ enum AllowList {
     static func load(workspace: URL) -> [String] {
         (try? Data(contentsOf: url(workspace))).flatMap { try? JSONDecoder().decode([String: [String]].self, from: $0) }?["allow"] ?? []
     }
+    static func loadDomains(workspace: URL) -> [String] {
+        (try? Data(contentsOf: url(workspace))).flatMap { try? JSONDecoder().decode([String: [String]].self, from: $0) }?["allowedDomains"] ?? []
+    }
     static func save(_ patterns: [String], workspace: URL) {
         try? FileManager.default.createDirectory(at: url(workspace).deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? JSONEncoder().encode(["allow": patterns]).write(to: url(workspace), options: .atomic)
+        var all = (try? Data(contentsOf: url(workspace))).flatMap { try? JSONDecoder().decode([String: [String]].self, from: $0) } ?? [:]
+        all["allow"] = patterns
+        try? JSONEncoder().encode(all).write(to: url(workspace), options: .atomic)
     }
 }
 

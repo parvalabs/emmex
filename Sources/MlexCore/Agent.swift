@@ -54,7 +54,7 @@ public final class AgentSession: @unchecked Sendable {
         self.activeSpec = spec == .auto ? await TierResolver.current().spec(for: .local) : spec
         let policy = record.mode == .code ? PolicyEngine(workspace: record.workspaceURL, cwd: record.cwdURL, level: record.permission) : nil
         self.policy = policy
-        let ctx = ToolContext(cwd: record.cwd, report: sink, policy: policy, approver: approver)
+        let ctx = ToolContext(cwd: record.cwd, report: sink, policy: policy, approver: approver, sessionID: record.id)
         var tools: [any Tool] = record.mode == .chat ? [] : Tools.standard(ctx)
         if let mcp, record.mode == .code { tools += await mcp.tools(ctx: ctx) }
         self.toolNames = tools.map(\.name)
@@ -143,7 +143,7 @@ public final class AgentSession: @unchecked Sendable {
     /// Replace the live session with one built from `transcript` (same tools and instructions),
     /// on `spec` if given, else the current effective model.
     func rebuild(with transcript: Transcript, spec: ModelSpec? = nil) async throws {
-        let ctx = ToolContext(cwd: record.cwd, report: sink, policy: policy, approver: approver)
+        let ctx = ToolContext(cwd: record.cwd, report: sink, policy: policy, approver: approver, sessionID: record.id)
         var tools: [any Tool] = record.mode == .chat ? [] : Tools.standard(ctx)
         if let mcpHost, record.mode == .code { tools += await mcpHost.tools(ctx: ctx) }
         session = try await Backends.makeSession(spec ?? effectiveSpec, tools: tools, instructions: nil, transcript: transcript,

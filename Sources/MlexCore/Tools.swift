@@ -37,13 +37,54 @@ public struct BashTool: Tool {
         if let refusal = await ctx.gate(.init(id: UUID().uuidString, tool: name, summary: command, command: command, paths: [])) {
             ctx.report(.toolResult(name: name, output: refusal)); return refusal
         }
+        var (status, out, sandboxed, denials) = try await Self.execute(command, ctx: ctx, sandboxed: true)
+        if !denials.isEmpty { out += "\n[sandbox] network blocked: " + denials.joined(separator: ", ") }
+        if sandboxed, status != 0, out.contains("Operation not permitted") {
+            out += "\n[sandbox] an operation was denied by the sandbox (writes are limited to the workspace and temp; credentials are unreadable)."
+            // Escape hatch: rerun unsandboxed, gated by approval (automatic with an audit line in full mode).
+            if Settings.load().unsandboxedRetry, let policy = ctx.policy {
+                let full = await policy.level == .full
+                let req = ToolRequest(id: UUID().uuidString, tool: name, summary: "retry unsandboxed: \(command)", command: nil, paths: [],
+                                      reason: "the sandbox denied this command; rerun it without the sandbox?")
+                var allowed = full
+                if full { ctx.report(.approvalResolved(id: req.id, allowed: true, layer: "full: unsandboxed retry")) }
+                else if let approver = ctx.approver {
+                    ctx.report(.approvalNeeded(req))
+                    let (ok, _) = await approver(req)
+                    ctx.report(.approvalResolved(id: req.id, allowed: ok, layer: ok ? "user: unsandboxed retry" : "user denied unsandboxed retry"))
+                    allowed = ok
+                }
+                if allowed {
+                    let (s2, o2, _, _) = try await Self.execute(command, ctx: ctx, sandboxed: false)
+                    status = s2; out = o2 + "\n[ran unsandboxed after approval]"
+                }
+            }
+        }
+        let result = "exit=\(status)\n\(out)"
+        ctx.report(.toolResult(name: name, output: result))
+        return result
+    }
+
+    /// Run a command, sandboxed or not. Returns (exit status, clipped output, was sandboxed, proxy denials).
+    static func execute(_ command: String, ctx: ToolContext, sandboxed: Bool) async throws -> (Int32, String, Bool, [String]) {
         let p = Process()
-        // The sandbox applies at every level; `full` only stops asking and grants network.
-        if let policy = ctx.policy, Settings.load().sandbox, Sandbox.isAvailable {
+        var proxyToken: String? = nil
+        var proxy: NetworkProxy? = nil
+        var didSandbox = false
+        if sandboxed, let policy = ctx.policy, Settings.load().sandbox, Sandbox.isAvailable {
             let full = await policy.level == .full
-            let sb = Sandbox(workspace: await policy.workspace, cwd: URL(fileURLWithPath: ctx.cwd), network: full || NetworkPolicy.needsNetwork(command))
-            let (exe, args) = sb.arguments(for: command)
-            p.executableURL = URL(fileURLWithPath: exe); p.arguments = args
+            let wantsNetwork = full || NetworkPolicy.needsNetwork(command)
+            var proxyURL: String? = nil
+            if wantsNetwork, let px = await SandboxRuntime.shared.proxyInstance() {
+                let domains = NetworkDefaults.domains + Settings.load().network.allowedDomains + (await policy.allowedDomains)
+                let token = px.register(.init(allowedDomains: domains, allowAll: full))
+                proxyToken = token; proxy = px; proxyURL = px.url(token: token)
+            }
+            let sb = Sandbox(workspace: await policy.workspace, cwd: URL(fileURLWithPath: ctx.cwd),
+                             tempDir: await SandboxRuntime.shared.tempDir(session: ctx.sessionID), proxyPort: proxyURL == nil ? nil : proxy?.port)
+            let (exe, args, env) = sb.arguments(for: command, proxyURL: proxyURL)
+            p.executableURL = URL(fileURLWithPath: exe); p.arguments = args; p.environment = env
+            didSandbox = true
         } else {
             p.executableURL = URL(fileURLWithPath: "/bin/zsh")
             p.arguments = ["-lc", command]
@@ -54,9 +95,9 @@ public struct BashTool: Tool {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
         let out = ctx.clip(String(decoding: data, as: UTF8.self))
-        let result = "exit=\(p.terminationStatus)\n\(out)"
-        ctx.report(.toolResult(name: name, output: result))
-        return result
+        var denials: [String] = []
+        if let proxyToken, let proxy { denials = proxy.denials(for: proxyToken).map { "\($0.host) (\($0.reason))" }; proxy.unregister(proxyToken) }
+        return (p.terminationStatus, out, didSandbox, denials)
     }
 }
 

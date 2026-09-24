@@ -52,12 +52,22 @@ See `docs/FEASIBILITY.md` for the spike results that shaped the design.
   or `full`. Approvals appear inline with Deny / Always allow / Allow; "always" saves a per-
   workspace prefix rule in `.mlex/permissions.json`. `mlex policy -- "<command>"` shows the
   decision without running it; `mlex trust` marks a workspace's own scripts as runnable.
-- **Sandbox**: every shell command runs under a Seatbelt profile (`sandbox-exec`): writes only
-  inside the workspace, temp, and package-manager caches; `.git/hooks` and `.mlex` never
-  writable; `~/.ssh`, `~/.aws`, `~/.gnupg`, Keychains, and shell history never readable;
-  network only for commands that need it (git, npm, pip, cargo, curl, brew…) or in `full`.
-  SwiftPM commands get `--disable-sandbox` because macOS refuses nested sandboxes. Disable with
-  `"sandbox": false` in settings.
+- **Sandbox**: every shell command and every stdio MCP server runs under a default-deny Seatbelt
+  profile (`sandbox-exec`, modeled on Codex's base policy): reads everywhere except `~/.ssh`,
+  `~/.aws`, `~/.gnupg`, Keychains, `gh`/`kube`/`gcloud` configs, `.netrc`, and shell history;
+  writes only inside the workspace, a per-session temp directory, the per-user temp and cache
+  directories, and package-manager caches; `.git/hooks`, `.git/config`, `.gitconfig`, shell rc
+  files, `.mcp.json`, `.mlex`, `.claude`, `.cursor`, `.vscode`, `.idea` never writable, and
+  their ancestors cannot be renamed. Network goes only through a local filtering proxy on
+  localhost: commands that need it (git, npm, pip, cargo, brew, curl, gh…) get a domain
+  allowlist (package registries, GitHub, Hugging Face, plus `network.allowedDomains` in
+  settings and `allowedDomains` in `.mlex/permissions.json`); `full` allows every domain;
+  addresses that resolve to loopback, private ranges, or cloud metadata are always refused,
+  and proxy denials are reported in the tool result. A command the sandbox denies can be rerun
+  unsandboxed after approval (`"unsandboxedRetry": false` disables). MCP servers take
+  `"network": "none" | "all" | ["domain", …]` and `"sandbox": false` per server. SwiftPM
+  commands get `--disable-sandbox` because macOS refuses nested sandboxes. `mlex sandbox --
+  "<cmd>"` runs a command under the profile for testing. Disable with `"sandbox": false`.
 - **Effort** per message: `off | low | medium | high` (Claude effort, MLX thinking on/off).
 - **Memory-aware model loading**: one MLX model resident at a time, with headroom warnings.
 

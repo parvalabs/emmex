@@ -11,7 +11,7 @@ import MlexServer
     }
     static let configuration = CommandConfiguration(
         abstract: "mlex: local-first agent on Apple Foundation Models, MLX models, and Claude.",
-        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self, MemoryCmd.self, Serve.self, Trust.self, Policy.self],
+        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self, MemoryCmd.self, Serve.self, Trust.self, Policy.self, SandboxCmd.self],
         defaultSubcommand: Chat.self)
 }
 
@@ -209,6 +209,32 @@ struct Policy: AsyncParsableCommand {
         case .ask(let why): print("ASK    \(why)")
         }
         print("always-allow suggestion: \(PolicyEngine.alwaysPattern(for: cmd))")
+    }
+}
+
+// MARK: sandbox (debug)
+
+struct SandboxCmd: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "sandbox", abstract: "Debug: run a command under the mlex sandbox as a given permission level would, without the policy.")
+    @Argument(parsing: .remaining) var command: [String]
+    @Option(name: .long) var workspace: String?
+    @Option(name: .long, help: "smart (allowlisted domains) | full (all domains) | none (no network)") var network: String = "smart"
+    func run() async throws {
+        let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+        let cmd = command.joined(separator: " ")
+        var proxyURL: String? = nil; var port: UInt16? = nil; var token: String? = nil; var px: NetworkProxy? = nil
+        if network != "none", let p = await SandboxRuntime.shared.proxyInstance() {
+            token = p.register(.init(allowedDomains: NetworkDefaults.domains + Settings.load().network.allowedDomains, allowAll: network == "full"))
+            proxyURL = p.url(token: token!); port = p.port; px = p
+        }
+        let sb = Sandbox(workspace: ws, cwd: ws, tempDir: await SandboxRuntime.shared.tempDir(session: "debug"), proxyPort: port)
+        let (exe, args, env) = sb.arguments(for: cmd, proxyURL: proxyURL)
+        let p = Process(); p.executableURL = URL(fileURLWithPath: exe); p.arguments = args; p.environment = env; p.currentDirectoryURL = ws
+        let pipe = Pipe(); p.standardOutput = pipe; p.standardError = pipe
+        try p.run(); let out = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self); p.waitUntilExit()
+        print(out.trimmingCharacters(in: .whitespacesAndNewlines).suffix(300))
+        if let token, let px { let d = px.denials(for: token); if !d.isEmpty { print("[proxy denied] " + d.map { "\($0.host): \($0.reason)" }.joined(separator: "; ")) }; px.unregister(token) }
+        print("exit=\(p.terminationStatus)")
     }
 }
 

@@ -13,10 +13,26 @@ public struct MCPServerConfig: Codable, Sendable, Hashable, Identifiable {
     public var url: String?
     public var headers: [String: String]?
     public var disabled: Bool?
+    /// Network for a sandboxed stdio server: "none", "all", or a list of domains (default: the
+    /// package-manager defaults through the filtering proxy).
+    public var network: NetworkSetting?
+    public enum NetworkSetting: Codable, Sendable, Hashable {
+        case mode(String), domains([String])
+        public init(from d: Decoder) throws {
+            let c = try d.singleValueContainer()
+            if let s = try? c.decode(String.self) { self = .mode(s) } else { self = .domains(try c.decode([String].self)) }
+        }
+        public func encode(to e: Encoder) throws {
+            var c = e.singleValueContainer()
+            switch self { case .mode(let s): try c.encode(s); case .domains(let l): try c.encode(l) }
+        }
+    }
+    /// Set to false to run this server outside the sandbox (default true when sandboxing is on).
+    public var sandbox: Bool?
     public var id: String { name }
     public var isRemote: Bool { url != nil }
 
-    enum CodingKeys: String, CodingKey { case command, args, env, url, headers, disabled }
+    enum CodingKeys: String, CodingKey { case command, args, env, url, headers, disabled, network, sandbox }
 
     struct File: Codable { var mcpServers: [String: MCPServerConfig] }
 
@@ -40,6 +56,10 @@ public actor MCPConnection {
     private let client: Client
     public private(set) var tools: [MCP.Tool] = []
     public private(set) var serverInfo: String = ""
+    public private(set) var sandboxed = false
+    /// Workspace the server runs for; used for the sandbox's writable root.
+    public var workspace: URL?
+    public func setWorkspace(_ ws: URL?) { workspace = ws }
 
     public init(config: MCPServerConfig) {
         self.config = config
@@ -59,12 +79,35 @@ public actor MCPConnection {
         } else {
             guard let command = config.command else { throw MlexError.badModelSpec("mcp server \(config.name) has neither command nor url") }
             let p = Process()
-            p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            p.arguments = [command] + (config.args ?? [])
             var env = ProcessInfo.processInfo.environment
             // Login-shell PATH so npx/uvx installed by Homebrew or nvm are found from a GUI app.
             if let path = Self.loginPath() { env["PATH"] = path }
             for (k, v) in config.env ?? [:] { env[k] = v }
+            if config.sandbox != false, Settings.load().sandbox, Sandbox.isAvailable, let ws = workspace {
+                // Same confinement as shell commands: writes only in the workspace and temp, no
+                // credential reads, network only through the filtering proxy.
+                var proxyURL: String? = nil; var port: UInt16? = nil
+                var wants = true; var allowAll = false; var domains = NetworkDefaults.domains + Settings.load().network.allowedDomains
+                switch config.network ?? .domains([]) {
+                case .mode("none"): wants = false
+                case .mode("all"): allowAll = true
+                case .domains(let d): domains += d
+                default: break
+                }
+                if wants, let px = await SandboxRuntime.shared.proxyInstance() {
+                    let token = px.register(.init(allowedDomains: domains, allowAll: allowAll)); proxyURL = px.url(token: token); port = px.port
+                }
+                let sb = Sandbox(workspace: ws, cwd: ws, tempDir: await SandboxRuntime.shared.tempDir(session: "mcp-\(config.name)"), proxyPort: port)
+                let (exe, args, sbEnv) = sb.arguments(for: "true", proxyURL: proxyURL)
+                // Run the server binary directly under the profile: sandbox-exec -p <profile> env <command> <args>.
+                p.executableURL = URL(fileURLWithPath: exe)
+                p.arguments = [args[0], args[1], "/usr/bin/env", command] + (config.args ?? [])
+                for k in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy", "NO_PROXY", "no_proxy", "TMPDIR", "MLEX_SANDBOX"] { if let v = sbEnv[k] { env[k] = v } }
+                sandboxed = true
+            } else {
+                p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                p.arguments = [command] + (config.args ?? [])
+            }
             p.environment = env
             let toServer = Pipe(), fromServer = Pipe()
             p.standardInput = toServer; p.standardOutput = fromServer
@@ -166,10 +209,11 @@ public actor MCPHost {
     public func connect(workspace: URL?, log: (@Sendable (String) -> Void)? = nil) async {
         for cfg in MCPServerConfig.load(workspace: workspace) {
             let c = MCPConnection(config: cfg)
+            await c.setWorkspace(workspace)
             do {
                 try await c.connect()
                 connections.append(c)
-                log?("mcp: \(cfg.name) connected, \(await c.tools.count) tools")
+                log?("mcp: \(cfg.name) connected, \(await c.tools.count) tools\(await c.sandboxed ? " (sandboxed)" : "")")
             } catch {
                 failures[cfg.name] = "\(error)"
                 log?("mcp: \(cfg.name) failed: \(error)")

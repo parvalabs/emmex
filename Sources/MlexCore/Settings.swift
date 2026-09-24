@@ -19,7 +19,7 @@ public struct Settings: Codable, Sendable {
     public init() {}
 
     // Every key is optional in the file: a partial settings.json keeps the defaults for the rest.
-    enum CodingKeys: String, CodingKey { case routes, router, memory, providers, permission, sandbox }
+    enum CodingKeys: String, CodingKey { case routes, router, memory, providers, permission, sandbox, network, unsandboxedRetry }
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         routes = try c.decodeIfPresent(Routes.self, forKey: .routes) ?? Routes()
@@ -28,6 +28,8 @@ public struct Settings: Codable, Sendable {
         providers = try c.decodeIfPresent([String: Provider].self, forKey: .providers)
         permission = try c.decodeIfPresent(String.self, forKey: .permission) ?? "smart"
         sandbox = try c.decodeIfPresent(Bool.self, forKey: .sandbox) ?? true
+        network = try c.decodeIfPresent(Network.self, forKey: .network) ?? Network()
+        unsandboxedRetry = try c.decodeIfPresent(Bool.self, forKey: .unsandboxedRetry) ?? true
     }
     /// "ondevice" (default) or "jev" (TypeSafe Jev; needs a key in Keychain service `mlex-jev` or JEV_API_KEY).
     public var router: String = "ondevice"
@@ -38,6 +40,17 @@ public struct Settings: Codable, Sendable {
     /// Run shell commands under a Seatbelt sandbox (writes confined to the workspace and tool
     /// caches, credential directories unreadable, network only when the policy grants it).
     public var sandbox: Bool = true
+    public struct Network: Codable, Sendable {
+        /// Domains commands may reach in addition to the package-manager defaults ("*.example.com").
+        public var allowedDomains: [String] = []
+        public init() {}
+        enum CodingKeys: String, CodingKey { case allowedDomains }
+        public init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); allowedDomains = try c.decodeIfPresent([String].self, forKey: .allowedDomains) ?? [] }
+    }
+    public var network = Network()
+    /// When a sandboxed command fails on a sandbox denial, offer to rerun it unsandboxed
+    /// (asks, except in full mode where it retries with an audit line). false: never.
+    public var unsandboxedRetry: Bool = true
 
     /// OpenAI-compatible chat-completions providers, keyed by the name used in specs (`<name>:<model>`).
     public struct Provider: Codable, Sendable, Hashable {
