@@ -36,6 +36,7 @@ let package = Package(
             .product(name: "ArgumentParser", package: "swift-argument-parser"),
         ]),
         .executableTarget(name: "MlexApp", dependencies: ["MlexCore", "MlexServer"]),
+        .testTarget(name: "MlexCoreTests", dependencies: ["MlexCore"]),
         .executableTarget(name: "spike-transcript", dependencies: ["MlexCore"]),
         .executableTarget(name: "spike-claude", dependencies: [
             "MlexCore",
