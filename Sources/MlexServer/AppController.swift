@@ -162,6 +162,16 @@ public final class AppController {
             if let p = str("permission"), let pl = PermissionLevel(rawValue: p) { permission = pl; if let cur = current { await cur.setPermission(pl) }; push() }
         case "set_trust":
             if let ws = workspace { WorkspaceTrust.set(ws, trusted: (a["trusted"] as? Bool) ?? false); push() }
+        case "workspace_diff":
+            guard let ws = workspace else { return ["error": "no workspace"] }
+            let cwd = current?.cwd ?? ws.path
+            func git(_ args: [String]) -> String {
+                let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/git"); p.arguments = args; p.currentDirectoryURL = URL(fileURLWithPath: cwd)
+                let pipe = Pipe(); p.standardOutput = pipe; p.standardError = pipe
+                (try? p.run()) ?? (); let d = pipe.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit()
+                return String(decoding: d, as: UTF8.self)
+            }
+            return ["stat": git(["diff", "--stat"]), "diff": String(git(["diff"]).prefix(200_000)), "untracked": git(["ls-files", "--others", "--exclude-standard"])]
         case "export":
             guard let cur = current else { return ["error": "no session"] }
             try? cur.save()

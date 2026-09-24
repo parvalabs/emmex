@@ -138,32 +138,93 @@ function renderTimeline() {
     [[S.tools.length, 'tools'], [S.skills.length, 'skills'], [S.mcp.length, 'MCP servers'], [S.memory.length, 'memories']].forEach(([n, l]) => st.append(el('span', 'stat', `${n} ${l}`)));
     em.append(st); t.append(em);
   }
-  let group = null;
+  panelReset();
+  let run = null; let turn = 0;
   for (const it of S.timeline) {
-    const e = renderItem(it); items.set(it.id, e);
-    if (isToolKind(it.kind)) { if (!group) { group = newGroup(); t.append(group); } addToGroup(group, e, it); }
-    else { if (group) { finishGroup(group); group = null; } t.append(e); if (it.kind === 'user' && it.userTurn) { const b = routeBadge(it.userTurn); if (b) t.append(b); } }
+    if (it.kind === 'user' && it.userTurn) { runs.forEach(finishTurn); turn = it.userTurn; }
+    if (isToolKind(it.kind)) { if (!run) { run = newRun(turn, S.timeline); t.append(run.chip); } addToRun(run, it); continue; }
+    if (run) { finishRun(run, false); run = null; }
+    const e = renderItem(it); items.set(it.id, e); t.append(e);
+    if (it.kind === 'user' && it.userTurn) { const b = routeBadge(it.userTurn); if (b) t.append(b); }
   }
-  if (group) finishGroup(group, S.busy);
+  if (run) finishRun(run, S.busy);
+  if (!S.busy) runs.forEach(finishTurn);
+  panelUpdate();
   if (S.busy) { const th = el('div', 'thinking'); th.append(el('span', 'dot'), el('span', '', 'Thinking…')); th.id = 'thinking'; t.append(th); }
   scrollBottom();
 }
-/* Consecutive tool calls/results collapse into a group with a count once the model resumes talking. */
+/* Tool activity lives in the right panel; the conversation keeps a chip per run. */
 const isToolKind = (k) => k === 'toolCall' || k === 'toolResult' || k === 'audit';
-function newGroup() { const g = el('div', 'toolgroup'); g.append(el('div', 'ghead'), el('div', 'gbody')); g.dataset.calls = '0'; g.dataset.names = ''; g.querySelector('.ghead').onclick = () => g.classList.toggle('open'); return g; }
-function addToGroup(g, e, it) {
-  g.querySelector('.gbody').append(e);
-  if (it.kind === 'toolCall') { g.dataset.calls = String(+g.dataset.calls + 1); g.dataset.names += (g.dataset.names ? ',' : '') + it.title; }
-  updateGroupHead(g, true);
+let runs = []; let liveRun = null;   // one run per user turn in the panel; one chip per contiguous burst in the conversation
+function panelReset() { runs = []; liveRun = null; $('#act-running').innerHTML = ''; $('#act-finished').innerHTML = ''; }
+function turnPrompt(turn, timeline) { const u = (timeline || S.timeline).find(x => x.kind === 'user' && x.userTurn === turn); return u ? u.text : ''; }
+function newRun(turn, timeline) {
+  let r = runs.find(x => x.turn === turn && !x.done);
+  if (!r) {
+    r = { turn, calls: 0, names: [], items: [], block: el('div', 'turnblock'), done: false, seg: null };
+    r.block.append(el('div', 'th'), el('div', 'tb')); r.block.querySelector('.th').onclick = () => r.block.classList.toggle('open');
+    runs.push(r);
+  }
+  r.seg = { calls: 0, names: [], chip: el('div', 'toolchip') };
+  r.chip = r.seg.chip;
+  r.seg.chip.onclick = () => { openPanel('activity'); if (r.done) { $('#act-finished').classList.remove('folded'); $('#act-fin-toggle').classList.add('open'); } r.block.classList.add('open'); r.block.scrollIntoView({ block: 'nearest' }); };
+  return r;
 }
-function updateGroupHead(g, live) {
-  const n = +g.dataset.calls; const counts = {}; g.dataset.names.split(',').filter(Boolean).forEach(x => counts[x] = (counts[x] || 0) + 1);
-  const summary = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => v > 1 ? `${k} ×${v}` : k).join(', ');
-  const h = g.querySelector('.ghead'); h.innerHTML = '';
-  h.append(el('span', 'chev', '▶'), el('span', 'n', `${n} tool call${n === 1 ? '' : 's'}`), el('span', 'sum', summary));
-  g.classList.toggle('open', live || n <= 2);
+function summarize(names) { const c = {}; names.forEach(x => c[x] = (c[x] || 0) + 1); return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, v]) => v > 1 ? `${k} ×${v}` : k).join(', '); }
+function addToRun(r, it) {
+  const e = renderItem(it); items.set(it.id, e); r.items.push(it); r.block.querySelector('.tb').append(e);
+  if (it.kind === 'toolCall') { r.calls++; r.names.push(it.title); r.seg.calls++; r.seg.names.push(it.title); }
+  updateRun(r, true);
 }
-function finishGroup(g, stillRunning = false) { updateGroupHead(g, stillRunning); }
+function updateRun(r, live) {
+  if (r.seg) r.seg.chip.textContent = `⚙ ${r.seg.calls} tool call${r.seg.calls === 1 ? '' : 's'}${live ? '…' : ''} · ${summarize(r.seg.names)}`;
+  const th = r.block.querySelector('.th'); th.innerHTML = '';
+  th.append(el('span', 'q', turnPrompt(r.turn) || `turn ${r.turn}`), el('span', 'small', summarize(r.names)), el('span', 'cnt', String(r.calls)));
+  if (live) { if (r.block.parentElement !== $('#act-running')) $('#act-running').append(r.block); r.block.classList.add('open'); liveRun = r; }
+}
+/* A burst ended (assistant text follows). The turn's block stays in Running until the turn ends. */
+function finishRun(r, stillRunning) { updateRun(r, stillRunning); liveRun = stillRunning ? r : null; }
+function finishTurn(r) { if (!r || r.done) return; r.done = true; updateRun(r, false); r.block.classList.remove('open'); $('#act-finished').prepend(r.block); if (liveRun === r) liveRun = null; }
+function panelUpdate() {
+  const fin = runs.filter(r => r.done).length; $('#act-fin-count').textContent = fin || '';
+  const total = runs.reduce((n, r) => n + r.calls, 0); const c = $('#panel-count'); c.textContent = total; c.classList.toggle('hidden', !total);
+  renderChanges();
+}
+function openPanel(tab) { $('#panel').classList.remove('hidden'); $('#app').classList.add('with-panel'); if (tab) selectTab(tab); try { localStorage.setItem('mlex.panel', '1'); } catch {} }
+function closePanel() { $('#panel').classList.add('hidden'); $('#app').classList.remove('with-panel'); try { localStorage.setItem('mlex.panel', '0'); } catch {} }
+try { if (localStorage.getItem('mlex.panel') === '1') openPanel(); } catch {}
+function selectTab(tab) { document.querySelectorAll('.ptab').forEach(b => b.classList.toggle('on', b.dataset.tab === tab)); $('#tab-activity').classList.toggle('hidden', tab !== 'activity'); $('#tab-changes').classList.toggle('hidden', tab !== 'changes'); if (tab === 'changes') renderChanges(); }
+document.querySelectorAll('.ptab').forEach(b => b.onclick = () => selectTab(b.dataset.tab));
+$('#panel-close').onclick = closePanel;
+$('#panel-btn').onclick = () => $('#panel').classList.contains('hidden') ? openPanel() : closePanel();
+$('#act-fin-toggle').onclick = (e) => { e.stopPropagation(); $('#act-finished').classList.toggle('folded'); $('#act-fin-toggle').classList.toggle('open'); };
+document.addEventListener('keydown', (e) => { if (e.metaKey && e.key === 'j') { e.preventDefault(); $('#panel-btn').click(); } });
+
+/* Changes: per-file summary of this session's edits, plus the workspace's real git diff on demand. */
+function renderChanges() {
+  const list = $('#chg-list'); list.innerHTML = '';
+  const byFile = new Map();
+  for (const r of runs) for (const it of r.items) {
+    if (it.kind !== 'toolCall' || (it.title !== 'edit_file' && it.title !== 'write_file')) continue;
+    const a = parseArgs(it); if (!a || !a.path) continue;
+    const rows = it.title === 'write_file' ? (a.content || '').split('\n').map(l => ['+', l]) : lineDiff(a.old || '', a.new || '');
+    const f = byFile.get(a.path) || { adds: 0, dels: 0, edits: [] };
+    f.adds += rows.filter(x => x[0] === '+').length; f.dels += rows.filter(x => x[0] === '-').length; f.edits.push(it); byFile.set(a.path, f);
+  }
+  if (!byFile.size) list.append(el('div', 'small', 'No edits in this session yet.'));
+  for (const [path, f] of byFile) {
+    const c = el('div', 'filechange'); const h = el('div', 'fh');
+    h.append(el('span', 'p', path), el('span', 'plus', `+${f.adds}`), el('span', 'minus', `−${f.dels}`), el('span', 'cnt', `${f.edits.length}`)); c.append(h);
+    const body = el('div', 'fb'); f.edits.forEach(it => { const d = renderEdit(it); if (d) { d.classList.add('open'); body.append(d); } }); c.append(body);
+    h.onclick = () => c.classList.toggle('open'); list.append(c);
+  }
+}
+$('#changes-refresh').onclick = async () => {
+  const r = await act({ type: 'workspace_diff' }); const sec = $('#chg-git'); sec.classList.remove('hidden');
+  $('#chg-stat').textContent = (r.stat || '').trim() + ((r.untracked || '').trim() ? '\nuntracked:\n' + r.untracked.trim() : '') || 'clean';
+  const pre = $('#chg-diff'); pre.innerHTML = '';
+  for (const line of (r.diff || '').split('\n')) { const cls = line.startsWith('+') && !line.startsWith('+++') ? 'add' : line.startsWith('-') && !line.startsWith('---') ? 'del' : line.startsWith('@@') ? 'hunk' : ''; const d = el('div', cls, line); pre.append(d); }
+};
 function scrollBottom() { const s = $('#scroll'); s.scrollTop = s.scrollHeight; }
 
 function routeBadge(turn) {
@@ -372,21 +433,22 @@ function openTools() {
 /* ---------- events ---------- */
 function applyState(s) {
   const structural = !S || S.timeline.length !== s.timeline.length || !S.current || !s.current || S.current.id !== s.current.id || S.busy !== s.busy || S.mode !== s.mode || (S.routes || []).length !== (s.routes || []).length;
+  const wasBusy = S && S.busy;
   S = s; renderSessions(); renderChrome(); renderPulls();
   if (structural) renderTimeline();
+  else if (wasBusy && !s.busy) { runs.forEach(finishTurn); panelUpdate(); }
 }
 const es = new EventSource('/events');
 es.addEventListener('state', (e) => applyState(JSON.parse(e.data)));
 es.addEventListener('append', (e) => { const it = JSON.parse(e.data); if (!S) return; S.timeline.push(it); const t = $('#timeline'); t.querySelector('.empty')?.remove();
-  const th = $('#thinking'); const node = renderItem(it); items.set(it.id, node);
-  const last = th ? th.previousElementSibling : t.lastElementChild;
+  const th = $('#thinking');
   if (isToolKind(it.kind)) {
-    let g = last && last.classList.contains('toolgroup') ? last : null;
-    if (!g) { g = newGroup(); th ? t.insertBefore(g, th) : t.append(g); }
-    addToGroup(g, node, it);
+    if (!liveRun) { const turn = Math.max(0, ...S.timeline.filter(x => x.kind === 'user').map(x => x.userTurn || 0)); liveRun = newRun(turn); th ? t.insertBefore(liveRun.chip, th) : t.append(liveRun.chip); if ($('#panel').classList.contains('hidden')) openPanel('activity'); }
+    addToRun(liveRun, it); panelUpdate();
   } else {
-    if (last && last.classList.contains('toolgroup')) finishGroup(last);
-    th ? t.insertBefore(node, th) : t.append(node);
+    if (liveRun) { finishRun(liveRun, false); panelUpdate(); }
+    if (it.kind === 'user') runs.forEach(finishTurn);
+    const node = renderItem(it); items.set(it.id, node); th ? t.insertBefore(node, th) : t.append(node);
   }
   scrollBottom(); });
 es.addEventListener('delta', (e) => { const d = JSON.parse(e.data); const it = S && S.timeline.find(x => x.id === d.id); if (!it) return; it.text += d.text; const node = items.get(d.id); if (node) node.innerHTML = md(it.text); scrollBottom(); });

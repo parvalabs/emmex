@@ -53,6 +53,13 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## App
 
+- **Terminal pane** (2026-09-23): a real terminal tab in the right panel (user-driven shell in the
+  workspace, sandbox-aware), like Claude Desktop's.
+- **Browser pane** (2026-09-23): an embedded browser tab the agent can drive and the user can
+  watch, for previewing web work and for browser-based tools.
+- **Session diff commit flow** (2026-09-23): from the Changes panel, stage and commit the
+  session's edits with a generated conventional message.
+
 - **Loading state for MLX models** (2026-09-22): the picker shows a spinner; the
   timeline should say what is loading and how big it is.
 - **Silent exit on launch** (2026-09-22): seen twice in the SwiftUI era, never reproduced;
