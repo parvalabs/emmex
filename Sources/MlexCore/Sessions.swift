@@ -14,8 +14,20 @@ public struct SessionRecord: Codable, Identifiable, Sendable {
     public var updatedAt: Date
     public var turns: Int
     public var transcript: Transcript
+    public var mode: SessionMode = .code
+    public var permission: PermissionLevel = .smart
 
-    public init(workspace: URL, cwd: URL, worktree: String? = nil, model: ModelSpec, effort: Effort = .default) {
+    enum CodingKeys: String, CodingKey { case id, workspace, cwd, worktree, title, model, effort, createdAt, updatedAt, turns, transcript, mode, permission }
+    public init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id); workspace = try c.decode(String.self, forKey: .workspace); cwd = try c.decode(String.self, forKey: .cwd)
+        worktree = try c.decodeIfPresent(String.self, forKey: .worktree); title = try c.decode(String.self, forKey: .title); model = try c.decode(String.self, forKey: .model)
+        effort = try c.decodeIfPresent(Effort.self, forKey: .effort) ?? .default; createdAt = try c.decode(Date.self, forKey: .createdAt); updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        turns = try c.decode(Int.self, forKey: .turns); transcript = try c.decode(Transcript.self, forKey: .transcript)
+        mode = try c.decodeIfPresent(SessionMode.self, forKey: .mode) ?? .code; permission = try c.decodeIfPresent(PermissionLevel.self, forKey: .permission) ?? .smart
+    }
+
+    public init(workspace: URL, cwd: URL, worktree: String? = nil, model: ModelSpec, effort: Effort = .default, mode: SessionMode = .code, permission: PermissionLevel = .smart) {
         id = UUID().uuidString.lowercased()
         self.workspace = workspace.standardizedFileURL.path
         self.cwd = cwd.standardizedFileURL.path
@@ -26,6 +38,7 @@ public struct SessionRecord: Codable, Identifiable, Sendable {
         createdAt = Date(); updatedAt = createdAt
         turns = 0
         transcript = Transcript()
+        self.mode = mode; self.permission = permission
     }
 
     public var workspaceURL: URL { URL(fileURLWithPath: workspace) }

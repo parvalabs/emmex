@@ -10,6 +10,15 @@ public final class AgentSession: @unchecked Sendable {
     /// Whether turns are saved to the session store after each response.
     public var autosave = true
     private let sink: EventSink
+    /// Permission engine for this session (nil in chat mode, which has no tools).
+    public private(set) var policy: PolicyEngine?
+    private var approver: Approver?
+    public var mode: SessionMode { record.mode }
+
+    public static let chatInstructions = """
+    You are mlex, a helpful assistant for a software developer. You have no tools in this mode: \
+    answer from knowledge, the conversation, and your memory. Be concise and concrete.
+    """
 
     public static let defaultInstructions = """
     You are mlex, a coding agent working in the user's project directory. Tools let you inspect \
@@ -22,9 +31,11 @@ public final class AgentSession: @unchecked Sendable {
 
     /// Start a new session in `workspace` (tools run in `cwd`, which defaults to the workspace).
     public convenience init(spec: ModelSpec, workspace: URL, cwd: URL? = nil, worktree: String? = nil,
-                            instructions: String? = nil, mcp: MCPHost? = nil, sink: @escaping EventSink) async throws {
-        let record = SessionRecord(workspace: workspace, cwd: cwd ?? workspace, worktree: worktree, model: spec)
-        try await self.init(record: record, spec: spec, instructions: instructions, mcp: mcp, sink: sink)
+                            mode: SessionMode = .code, permission: PermissionLevel? = nil,
+                            instructions: String? = nil, mcp: MCPHost? = nil, approver: Approver? = nil, sink: @escaping EventSink) async throws {
+        let level = permission ?? PermissionLevel(rawValue: Settings.load().permission) ?? .smart
+        let record = SessionRecord(workspace: workspace, cwd: cwd ?? workspace, worktree: worktree, model: spec, mode: mode, permission: level)
+        try await self.init(record: record, spec: spec, instructions: instructions, mcp: mcp, approver: approver, sink: sink)
     }
 
     /// Names of every tool available to this session, built-in and MCP.
@@ -33,18 +44,21 @@ public final class AgentSession: @unchecked Sendable {
     /// Resume a saved session, optionally on a different model (the transcript carries over).
     /// `mcp` adds the tools of every connected MCP server.
     public init(record: SessionRecord, spec: ModelSpec? = nil, instructions: String? = nil,
-                mcp: MCPHost? = nil, sink: @escaping EventSink) async throws {
+                mcp: MCPHost? = nil, approver: Approver? = nil, sink: @escaping EventSink) async throws {
         var record = record
         let spec = spec ?? record.spec
         record.model = spec.description
         self.spec = spec; self.cwd = record.cwd; self.sink = sink; self.record = record
         self.mcpHost = mcp
+        self.approver = approver
         self.activeSpec = spec == .auto ? await TierResolver.current().spec(for: .local) : spec
-        let ctx = ToolContext(cwd: record.cwd, report: sink)
-        var tools = Tools.standard(ctx)
-        if let mcp { tools += await mcp.tools(ctx: ctx) }
+        let policy = record.mode == .code ? PolicyEngine(workspace: record.workspaceURL, cwd: record.cwdURL, level: record.permission) : nil
+        self.policy = policy
+        let ctx = ToolContext(cwd: record.cwd, report: sink, policy: policy, approver: approver)
+        var tools: [any Tool] = record.mode == .chat ? [] : Tools.standard(ctx)
+        if let mcp, record.mode == .code { tools += await mcp.tools(ctx: ctx) }
         self.toolNames = tools.map(\.name)
-        let base = instructions ?? Self.defaultInstructions
+        let base = instructions ?? (record.mode == .chat ? Self.chatInstructions : Self.defaultInstructions)
         self.baseInstructions = base
         let composed = await Self.compose(base, workspace: record.workspaceURL, cwd: record.cwdURL, spec: spec)
         var transcript: Transcript? = nil
@@ -74,6 +88,12 @@ public final class AgentSession: @unchecked Sendable {
         record.transcript = session.transcript
         record.updatedAt = Date()
         try SessionStore.save(record)
+    }
+
+    public func setPermission(_ level: PermissionLevel) async {
+        record.permission = level
+        await policy?.setLevel(level)
+        if autosave { try? save() }
     }
 
     public func rename(_ title: String) {
@@ -123,9 +143,9 @@ public final class AgentSession: @unchecked Sendable {
     /// Replace the live session with one built from `transcript` (same tools and instructions),
     /// on `spec` if given, else the current effective model.
     func rebuild(with transcript: Transcript, spec: ModelSpec? = nil) async throws {
-        let ctx = ToolContext(cwd: record.cwd, report: sink)
-        var tools = Tools.standard(ctx)
-        if let mcpHost { tools += await mcpHost.tools(ctx: ctx) }
+        let ctx = ToolContext(cwd: record.cwd, report: sink, policy: policy, approver: approver)
+        var tools: [any Tool] = record.mode == .chat ? [] : Tools.standard(ctx)
+        if let mcpHost, record.mode == .code { tools += await mcpHost.tools(ctx: ctx) }
         session = try await Backends.makeSession(spec ?? effectiveSpec, tools: tools, instructions: nil, transcript: transcript,
                                                  onWarning: { [sink] in sink(.warning($0)) })
     }

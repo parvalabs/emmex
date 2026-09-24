@@ -148,3 +148,17 @@ input.text:focus { border-color: var(--accent); }
 .fact .k { color: var(--accent); font-size: 11px; width: 66px; flex: 0 0 66px; }
 .fact .x { margin-left: auto; color: var(--faint); }
 .small { font-size: 11.5px; color: var(--muted); }
+
+/* ---------- modes, permissions, approvals ---------- */
+.modes { display: inline-flex; background: var(--fill); border-radius: 7px; padding: 2px; -webkit-app-region: no-drag; }
+.seg { font-size: 11.5px; font-weight: 500; color: var(--muted); padding: 3px 10px; border-radius: 5px; }
+.seg.on { background: var(--raised); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+#perm-btn { -webkit-app-region: no-drag; }
+.approval { background: var(--raised); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.approval .head { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; }
+.approval .head .tool { color: var(--warn); }
+.approval pre { margin: 0; font: 12px/1.5 var(--mono); background: var(--code); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; word-break: break-all; max-height: 160px; overflow: auto; }
+.approval .why { font-size: 11.5px; color: var(--muted); }
+.approval .acts { display: flex; gap: 6px; justify-content: flex-end; }
+.audit { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); margin-left: 32px; margin-top: -10px; }
+.audit .ok { color: var(--ok); } .audit .no { color: var(--err); }

@@ -41,6 +41,12 @@ public final class AppController {
     var pullTasks: [String: Task<Void, Never>] = [:]
 
     // Workspace capabilities
+    // Approvals: pending requests and the continuations that resume the waiting tool.
+    var pendingApprovals: [ToolRequest] = []
+    var waiters: [String: CheckedContinuation<(Bool, String?), Never>] = [:]
+    var audit: [(id: String, allowed: Bool, layer: String)] = []
+    var mode: SessionMode = .code
+    var permission: PermissionLevel = PermissionLevel(rawValue: Settings.load().permission) ?? .smart
     var mcp = MCPHost()
     var mcpSummary: [(server: String, info: String, tools: [String])] = []
     var mcpFailures: [String: String] = [:]
@@ -73,6 +79,9 @@ public final class AppController {
             "archived": memory.filter(\.archived).sorted { $0.lastUsed > $1.lastUsed }.map { ["id": $0.id, "kind": $0.kind, "scope": $0.scope, "text": $0.text, "superseded": $0.supersededBy != nil] },
             "tools": current?.toolNames ?? [],
             "nativePanels": canUseNativePanels,
+            "pending": pendingApprovals.map { ["id": $0.id, "tool": $0.tool, "summary": $0.summary, "reason": $0.reason, "command": $0.command as Any] },
+            "mode": mode.rawValue, "permission": permission.rawValue,
+            "trusted": workspace.map { WorkspaceTrust.isTrusted($0) } ?? false,
         ]
         if let cur = current {
             d["current"] = ["id": cur.record.id, "title": cur.record.title, "worktree": cur.record.worktree as Any, "model": cur.spec.description,
@@ -135,6 +144,21 @@ public final class AppController {
             let merges = (try? await MemoryStore.shared.consolidate(workspace: ws)) ?? []
             await refreshMemory(); push()
             if merges.isEmpty { info("memory: nothing to merge") } else { for m in merges { info("memory: merged \(m.from.count) facts → \(m.merged)") } }
+        case "approve":
+            guard let id = str("id"), let w = waiters.removeValue(forKey: id) else { return ["error": "no such request"] }
+            pendingApprovals.removeAll { $0.id == id }
+            let allow = (a["allow"] as? Bool) ?? false
+            var always: String? = nil
+            if allow, (a["always"] as? Bool) == true, let cmd = str("command"), !cmd.isEmpty {
+                always = cmd.split(separator: " ").prefix(2).joined(separator: " ") + " *"
+            }
+            w.resume(returning: (allow, always)); push()
+        case "set_mode":
+            if let m = str("mode"), let sm = SessionMode(rawValue: m), sm != mode { mode = sm; newSession() }
+        case "set_permission":
+            if let p = str("permission"), let pl = PermissionLevel(rawValue: p) { permission = pl; if let cur = current { await cur.setPermission(pl) }; push() }
+        case "set_trust":
+            if let ws = workspace { WorkspaceTrust.set(ws, trusted: (a["trusted"] as? Bool) ?? false); push() }
         case "export":
             guard let cur = current else { return ["error": "no session"] }
             try? cur.save()
@@ -187,16 +211,16 @@ public final class AppController {
                 do { let w = try Worktrees.add(repo: ws, branch: worktree); cwd = URL(fileURLWithPath: w.path); info("worktree \(worktree) at \(w.path)") }
                 catch { self.error("\(error)"); return }
             }
-            await load { try await AgentSession(spec: self.selected, workspace: ws, cwd: cwd, worktree: worktree, mcp: self.mcp, sink: self.sink) }
+            await load { try await AgentSession(spec: self.selected, workspace: ws, cwd: cwd, worktree: worktree, mode: self.mode, permission: self.permission, mcp: self.mcp, approver: self.approver, sink: self.sink) }
         }
     }
 
     func resume(_ id: String) {
         guard let ws = workspace, current?.record.id != id, let record = try? SessionStore.load(id, workspace: ws) else { return }
         timeline = []; lastUsage = nil; current = nil
-        selected = record.spec; effort = record.effort
+        selected = record.spec; effort = record.effort; mode = record.mode; permission = record.permission
         replay(Compactor.sanitized(record.transcript)); push()
-        Task { await load { try await AgentSession(record: record, spec: nil, mcp: self.mcp, sink: self.sink) } }
+        Task { await load { try await AgentSession(record: record, spec: nil, mcp: self.mcp, approver: self.approver, sink: self.sink) } }
     }
 
     func select(_ spec: ModelSpec) {
@@ -204,7 +228,7 @@ public final class AppController {
         selected = spec
         guard let cur = current else { push(); return }
         try? cur.save(); current = nil; push()
-        Task { await load { try await AgentSession(record: cur.record, spec: spec, mcp: self.mcp, sink: self.sink) } }
+        Task { await load { try await AgentSession(record: cur.record, spec: spec, mcp: self.mcp, approver: self.approver, sink: self.sink) } }
     }
 
     func rename(_ id: String, to title: String) {
@@ -241,7 +265,11 @@ public final class AppController {
         Task { do { _ = try await cur.compact() } catch { self.error("\(error)") }; await updateContext(); busy = false; push() }
     }
 
-    func stop() { runTask?.cancel(); queue.removeAll(); push() }
+    func stop() {
+        for (id, w) in waiters { w.resume(returning: (false, nil)); pendingApprovals.removeAll { $0.id == id } }
+        waiters.removeAll()
+        runTask?.cancel(); queue.removeAll(); push()
+    }
 
     private func load(_ make: @escaping () async throws -> AgentSession) async {
         generation += 1; let gen = generation
@@ -316,6 +344,18 @@ public final class AppController {
 
     private var sink: EventSink { { [weak self] ev in Task { @MainActor in self?.handleEvent(ev) } } }
 
+    /// Suspends the tool until the web UI answers.
+    private var approver: Approver {
+        { [weak self] r in
+            await withCheckedContinuation { (c: CheckedContinuation<(Bool, String?), Never>) in
+                Task { @MainActor in
+                    guard let self else { c.resume(returning: (false, nil)); return }
+                    self.waiters[r.id] = c
+                }
+            }
+        }
+    }
+
     private func handleEvent(_ ev: AgentEvent) {
         switch ev {
         case .textDelta(let t):
@@ -331,6 +371,13 @@ public final class AppController {
         case .finished(let usage, _): lastUsage = usage; footprint = SystemMemory.footprint()
         case .warning(let w): append(.init(id: UUID().uuidString, kind: "warning", title: "", text: w, userTurn: nil))
         case .info(let i): info(i)
+        case .approvalNeeded(let r): pendingApprovals.append(r); push()
+        case .approvalResolved(let id, let allowed, let layer):
+            audit.append((id, allowed, layer))
+            pendingApprovals.removeAll { $0.id == id }
+            if !allowed || layer.hasPrefix("classifier") || layer.hasPrefix("provenance") || layer == "user" {
+                append(.init(id: UUID().uuidString, kind: "audit", title: allowed ? "allowed" : "denied", text: layer, userTurn: nil))
+            }
         }
     }
 

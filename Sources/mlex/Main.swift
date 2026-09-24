@@ -11,7 +11,7 @@ import MlexServer
     }
     static let configuration = CommandConfiguration(
         abstract: "mlex: local-first agent on Apple Foundation Models, MLX models, and Claude.",
-        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self, MemoryCmd.self, Serve.self],
+        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self, MemoryCmd.self, Serve.self, Trust.self, Policy.self],
         defaultSubcommand: Chat.self)
 }
 
@@ -20,6 +20,19 @@ struct ModelOption: ParsableArguments {
     var model: String = "system"
     @Option(name: .long, help: "Reasoning effort: off | low | medium | high (Claude effort, MLX thinking on/off).")
     var effort: String = "off"
+    @Option(name: .long, help: "Permission level: ask | smart | full (default from settings, smart).")
+    var permission: String?
+    @Option(name: .long, help: "Session mode: chat (no tools) | code.")
+    var mode: String = "code"
+    func permissionLevel() throws -> PermissionLevel? {
+        guard let permission else { return nil }
+        guard let p = PermissionLevel(rawValue: permission) else { throw ValidationError("permission must be ask, smart, or full") }
+        return p
+    }
+    func sessionMode() throws -> SessionMode {
+        guard let m = SessionMode(rawValue: mode) else { throw ValidationError("mode must be chat or code") }
+        return m
+    }
     func effortLevel() throws -> Effort {
         guard let e = Effort(rawValue: effort) else { throw ValidationError("effort must be one of off, low, medium, high") }
         return e
@@ -178,6 +191,40 @@ struct WorktreesCmd: AsyncParsableCommand {
     }
 }
 
+// MARK: policy
+
+struct Policy: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "Show what the permission policy would decide for a command, without running it.")
+    @Argument(parsing: .remaining) var command: [String]
+    @Option(name: .long) var workspace: String?
+    @Option(name: .long, help: "ask | smart | full") var level: String = "smart"
+    func run() async throws {
+        let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+        let engine = PolicyEngine(workspace: ws, cwd: ws, level: PermissionLevel(rawValue: level) ?? .smart)
+        let cmd = command.joined(separator: " ")
+        let d = await engine.decide(.init(id: "x", tool: "bash", summary: cmd, command: cmd, paths: []))
+        switch d {
+        case .allow(let why): print("ALLOW  \(why)")
+        case .deny(let why): print("DENY   \(why)")
+        case .ask(let why): print("ASK    \(why)")
+        }
+        print("always-allow suggestion: \(PolicyEngine.alwaysPattern(for: cmd))")
+    }
+}
+
+// MARK: trust
+
+struct Trust: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "Mark a workspace as trusted (its own scripts may run without asking in smart mode) or untrusted.")
+    @Option(name: .long) var workspace: String?
+    @Flag(name: .long) var revoke = false
+    func run() async throws {
+        let ws = URL(fileURLWithPath: workspace ?? FileManager.default.currentDirectoryPath)
+        WorkspaceTrust.set(ws, trusted: !revoke)
+        print("\(ws.path): \(revoke ? "untrusted" : "trusted")")
+    }
+}
+
 // MARK: serve
 
 struct Serve: AsyncParsableCommand {
@@ -310,7 +357,7 @@ struct Run: AsyncParsableCommand {
     func run() async throws {
         let dir = URL(fileURLWithPath: cwd ?? FileManager.default.currentDirectoryPath)
         let mcp = MCPHost(); await mcp.connect(workspace: dir) { FileHandle.standardError.write(Data("\($0)\n".utf8)) }
-        let agent = try await AgentSession(spec: try model.spec(), workspace: dir, mcp: mcp, sink: Printer.print)
+        let agent = try await AgentSession(spec: try model.spec(), workspace: dir, mode: try model.sessionMode(), permission: try model.permissionLevel(), mcp: mcp, approver: nil, sink: Printer.print)
         agent.autosave = false
         try await agent.run(prompt.joined(separator: " "), effort: try model.effortLevel())
         await mcp.disconnectAll()
@@ -334,7 +381,7 @@ struct Chat: AsyncParsableCommand {
         if let resume {
             guard let record = try SessionStore.find(resume) else { throw ValidationError("no session matching \(resume)") }
             let override = model.model == "system" ? nil : try model.spec()   // only override when --model was given explicitly
-            agent = try await AgentSession(record: record, spec: override, mcp: mcp, sink: Printer.print)
+            agent = try await AgentSession(record: record, spec: override, mcp: mcp, approver: terminalApprover, sink: Printer.print)
             effort = record.effort
             print("resumed \(record.id.prefix(8)) “\(record.title)” (\(record.turns) turns)")
         } else {
@@ -344,11 +391,11 @@ struct Chat: AsyncParsableCommand {
                 cwd = URL(fileURLWithPath: w.path)
                 print("worktree \(worktree) at \(w.path)")
             }
-            agent = try await AgentSession(spec: try model.spec(), workspace: ws, cwd: cwd, worktree: worktree, mcp: mcp, sink: Printer.print)
+            agent = try await AgentSession(spec: try model.spec(), workspace: ws, cwd: cwd, worktree: worktree, mode: try model.sessionMode(), permission: try model.permissionLevel(), mcp: mcp, approver: terminalApprover, sink: Printer.print)
         }
         let spec = agent.spec, dir = agent.cwd
         let commands = Commands(workspace: ws)
-        print("mlex · \(spec) · \(dir) · effort \(effort.rawValue) · session \(agent.record.id.prefix(8)) · \(commands.skills.count) skills · \(commands.templates.count) templates · \(agent.toolNames.count) tools")
+        print("mlex · \(spec) · \(dir) · \(agent.mode.rawValue) · permission \(agent.record.permission.rawValue) · effort \(effort.rawValue) · session \(agent.record.id.prefix(8)) · \(agent.toolNames.count) tools")
         while true {
             FileHandle.standardOutput.write(Data("\n> ".utf8))
             guard let line = readLine(), !line.isEmpty, line != "/quit", line != "/exit" else { break }
@@ -380,7 +427,7 @@ struct Chat: AsyncParsableCommand {
                 do {
                     let newSpec = try ModelSpec(parsing: v)
                     try agent.save()
-                    agent = try await AgentSession(record: agent.record, spec: newSpec, mcp: mcp, sink: Printer.print)
+                    agent = try await AgentSession(record: agent.record, spec: newSpec, mcp: mcp, approver: terminalApprover, sink: Printer.print)
                     print("model: \(newSpec) · footprint \(SystemMemory.format(SystemMemory.footprint()))")
                 } catch { print("error: \(error)") }
                 continue
@@ -399,7 +446,7 @@ struct Chat: AsyncParsableCommand {
                 do {
                     try agent.save()
                     let f = agent.record.forked(beforeUserTurn: n); try SessionStore.save(f)
-                    agent = try await AgentSession(record: f, spec: nil, mcp: mcp, sink: Printer.print)
+                    agent = try await AgentSession(record: f, spec: nil, mcp: mcp, approver: terminalApprover, sink: Printer.print)
                     print("now in fork \(f.id.prefix(8)) (\(f.userTurns) user turns kept)")
                 } catch { print("error: \(error)") }
                 continue
@@ -408,6 +455,13 @@ struct Chat: AsyncParsableCommand {
                 for s in SessionStore.list(workspace: ws) { print("  \(s.id.prefix(8))  \(s.turns) turns  \(s.title)") }
                 continue
             }
+            if line.hasPrefix("/permission") {
+                let v = line.dropFirst(11).trimmingCharacters(in: .whitespaces)
+                if let p = PermissionLevel(rawValue: v) { await agent.setPermission(p); print("permission: \(p.rawValue)") } else { print("permission: ask | smart | full") }
+                continue
+            }
+            if line == "/trust" { WorkspaceTrust.set(ws, trusted: true); print("workspace trusted: its own scripts may run without asking"); continue }
+            if line == "/untrust" { WorkspaceTrust.set(ws, trusted: false); print("workspace untrusted"); continue }
             if line.hasPrefix("/effort") {
                 let v = line.dropFirst(7).trimmingCharacters(in: .whitespaces)
                 if let e = Effort(rawValue: v) { effort = e; print("effort: \(e.rawValue)") } else { print("effort: off | low | medium | high") }
@@ -423,6 +477,14 @@ struct Chat: AsyncParsableCommand {
         }
         await mcp.disconnectAll()
     }
+}
+
+/// Terminal approver: prints the request and reads y / n / a (always allow this command's first word).
+let terminalApprover: Approver = { r in
+    FileHandle.standardOutput.write(Data("\n  ⚠ \(r.tool): \(r.summary)\n    \(r.reason)\n    allow? [y/N/a=always] ".utf8))
+    let answer = readLine()?.trimmingCharacters(in: .whitespaces).lowercased() ?? "n"
+    if answer == "a", let cmd = r.command { return (true, PolicyEngine.alwaysPattern(for: cmd)) }
+    return (answer == "y" || answer == "yes", nil)
 }
 
 enum Printer {
@@ -444,6 +506,11 @@ enum Printer {
             FileHandle.standardError.write(Data("warning: \(w)\n".utf8))
         case .info(let i):
             FileHandle.standardOutput.write(Data("\(lineStart ? "" : "\n")  ℹ \(i)\n".utf8)); lineStart = true
+        case .approvalNeeded: break
+        case .approvalResolved(_, let allowed, let layer):
+            if ProcessInfo.processInfo.environment["MLEX_AUDIT"] != nil || !allowed {
+                FileHandle.standardOutput.write(Data("\(lineStart ? "" : "\n")  \(allowed ? "✓" : "✗") \(layer)\n".utf8)); lineStart = true
+            }
         }
     }
 }

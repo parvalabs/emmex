@@ -19,18 +19,21 @@ public struct Settings: Codable, Sendable {
     public init() {}
 
     // Every key is optional in the file: a partial settings.json keeps the defaults for the rest.
-    enum CodingKeys: String, CodingKey { case routes, router, memory, providers }
+    enum CodingKeys: String, CodingKey { case routes, router, memory, providers, permission }
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         routes = try c.decodeIfPresent(Routes.self, forKey: .routes) ?? Routes()
         router = try c.decodeIfPresent(String.self, forKey: .router) ?? "ondevice"
         memory = try c.decodeIfPresent(Bool.self, forKey: .memory) ?? true
         providers = try c.decodeIfPresent([String: Provider].self, forKey: .providers)
+        permission = try c.decodeIfPresent(String.self, forKey: .permission) ?? "smart"
     }
     /// "ondevice" (default) or "jev" (TypeSafe Jev; needs a key in Keychain service `mlex-jev` or JEV_API_KEY).
     public var router: String = "ondevice"
     /// Remember facts from conversations and inject relevant ones.
     public var memory: Bool = true
+    /// Default permission level for new sessions: ask | smart | full.
+    public var permission: String = "smart"
 
     /// OpenAI-compatible chat-completions providers, keyed by the name used in specs (`<name>:<model>`).
     public struct Provider: Codable, Sendable, Hashable {

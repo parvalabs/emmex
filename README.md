@@ -45,6 +45,13 @@ See `docs/FEASIBILITY.md` for the spike results that shaped the design.
   `/memory` in chat, Memory in the Tools dialog. Disable with `"memory": false` in settings.
 - **Fork and export**: `sessions fork <id> [--before N]`, `/fork N`, "Fork before this message"
   in the app; `sessions export <id> [file.html|.json]`, `/export`, File > Export Session.
+- **Modes and permissions**: Chat (no tools) or Code. In Code, a permission level gates every
+  write and command: `ask` (everything asks), `smart` (default: rules decide reads, workspace
+  edits, protected paths, and dangerous patterns; scripts the harness wrote or in a trusted
+  workspace run; the on-device model judges the rest and can only allow, never override a rule),
+  or `full`. Approvals appear inline with Deny / Always allow / Allow; "always" saves a per-
+  workspace prefix rule in `.mlex/permissions.json`. `mlex policy -- "<command>"` shows the
+  decision without running it; `mlex trust` marks a workspace's own scripts as runnable.
 - **Effort** per message: `off | low | medium | high` (Claude effort, MLX thinking on/off).
 - **Memory-aware model loading**: one MLX model resident at a time, with headroom warnings.
 

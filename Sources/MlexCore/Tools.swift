@@ -34,6 +34,9 @@ public struct BashTool: Tool {
     public func call(arguments: GeneratedContent) async throws -> String {
         let command = try arguments.value(String.self, forProperty: "command")
         ctx.report(.toolCall(name: name, arguments: command))
+        if let refusal = await ctx.gate(.init(id: UUID().uuidString, tool: name, summary: command, command: command, paths: [])) {
+            ctx.report(.toolResult(name: name, output: refusal)); return refusal
+        }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
         p.arguments = ["-lc", command]
@@ -84,10 +87,14 @@ public struct WriteFileTool: Tool {
         let content = try arguments.value(String.self, forProperty: "content")
         ctx.report(.toolCall(name: name, arguments: "\(path) (\(content.count) chars)"))
         let url = URL(fileURLWithPath: ctx.cwd).appendingPathComponent(path)
+        if let refusal = await ctx.gate(.init(id: UUID().uuidString, tool: name, summary: "write \(path)", command: nil, paths: [url.path])) {
+            ctx.report(.toolResult(name: name, output: refusal)); return refusal
+        }
         let result: String
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try content.write(to: url, atomically: true, encoding: .utf8)
+            await ctx.policy?.recordCreated(url.path)
             result = "wrote \(content.count) chars to \(path)"
         } catch { result = "error: \(error.localizedDescription)" }
         ctx.report(.toolResult(name: name, output: result))
@@ -112,6 +119,9 @@ public struct EditFileTool: Tool {
         let new = try arguments.value(String.self, forProperty: "new")
         ctx.report(.toolCall(name: name, arguments: "\(path): \(old.prefix(40))… -> \(new.prefix(40))…"))
         let url = URL(fileURLWithPath: ctx.cwd).appendingPathComponent(path)
+        if let refusal = await ctx.gate(.init(id: UUID().uuidString, tool: name, summary: "edit \(path)", command: nil, paths: [url.path])) {
+            ctx.report(.toolResult(name: name, output: refusal)); return refusal
+        }
         let result: String
         do {
             let text = try String(contentsOf: url, encoding: .utf8)
@@ -119,6 +129,7 @@ public struct EditFileTool: Tool {
             if n != 1 { result = "error: old text occurs \(n) times, expected exactly 1" }
             else {
                 try text.replacingOccurrences(of: old, with: new).write(to: url, atomically: true, encoding: .utf8)
+                await ctx.policy?.recordCreated(url.path)
                 result = "edited \(path)"
             }
         } catch { result = "error: \(error.localizedDescription)" }

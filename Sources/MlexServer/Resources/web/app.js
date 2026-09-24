@@ -63,6 +63,7 @@ function renderItem(it) {
       e = el('div', 'result'); const head = el('div', 'head'); const first = (it.text.split('\n')[0] || '(no output)'); const n = it.text.split('\n').length;
       head.append(el('span', 'chev', '▶'), el('span', 'first', first)); if (n > 1) head.append(el('span', '', `· ${n} lines`));
       const pre = el('pre', '', it.text); e.append(head, pre); head.onclick = () => e.classList.toggle('open'); break; }
+    case 'audit': { e = el('div', 'audit'); e.append(el('span', it.title === 'allowed' ? 'ok' : 'no', it.title === 'allowed' ? '✓' : '✗'), el('span', '', it.text)); break; }
     default: e = el('div', it.kind, it.text);
   }
   e.dataset.id = it.id; return e;
@@ -120,11 +121,29 @@ function renderChrome() {
   $('#model-label').textContent = S.selected === 'auto' ? `Auto · ${S.current ? S.current.effectiveModel : '…'}` : S.selected;
   $('#effort-label').textContent = S.effort === 'off' ? 'Effort' : S.effort[0].toUpperCase() + S.effort.slice(1);
   $('#stop').classList.toggle('hidden', !S.busy);
+  document.querySelectorAll('#modes .seg').forEach(b => b.classList.toggle('on', b.dataset.mode === S.mode));
+  $('#perm-label').textContent = { ask: 'Ask', smart: 'Smart', full: 'Full auto' }[S.permission] || S.permission;
+  $('#perm-btn').classList.toggle('hidden', S.mode === 'chat');
+  renderApprovals();
   $('#mem').textContent = S.footprint;
   const inp = $('#input'); inp.placeholder = !S.current ? 'Choose a folder to start' : S.busy ? 'Type a follow-up; it is sent when this turn finishes' : 'How can I help?  Type / for skills and templates';
   const q = $('#queue'); q.innerHTML = ''; if (S.queue.length) { q.classList.remove('hidden'); q.append(el('span', '', '⇥'));
     S.queue.forEach(t => q.append(el('span', 'q', t))); const c = el('button', 'btn', 'Clear'); c.onclick = () => act({ type: 'clear_queue' }); q.append(c); } else q.classList.add('hidden');
   updateSend();
+}
+function renderApprovals() {
+  const box = $('#approvals'); box.innerHTML = '';
+  for (const r of (S.pending || [])) {
+    const c = el('div', 'approval');
+    const h = el('div', 'head'); h.append(el('span', 'tool', '⚠ ' + r.tool), el('span', '', 'wants to run')); c.append(h);
+    c.append(el('pre', '', r.command || r.summary));
+    if (r.reason) c.append(el('div', 'why', r.reason));
+    const acts = el('div', 'acts');
+    const deny = el('button', 'btn', 'Deny'); deny.onclick = () => act({ type: 'approve', id: r.id, allow: false });
+    const always = el('button', 'btn', 'Always allow'); always.title = 'Allow this command prefix in this workspace from now on'; always.onclick = () => act({ type: 'approve', id: r.id, allow: true, always: true, command: r.command || '' });
+    const allow = el('button', 'btn primary', 'Allow'); allow.onclick = () => act({ type: 'approve', id: r.id, allow: true });
+    acts.append(deny); if (r.command) acts.append(always); acts.append(allow); c.append(acts); box.append(c);
+  }
 }
 function updateSend() { $('#send').disabled = !$('#input').value.trim() || !S || !S.current; }
 
@@ -160,6 +179,12 @@ $('#workspace').onclick = (ev) => { ev.stopPropagation(); const r = $('#workspac
   entries.push({ sep: true }, { label: 'Open Folder…', run: () => S.nativePanels ? act({ type: 'choose_workspace' }) : (p => p && act({ type: 'open_workspace', path: p }))(prompt('Folder path')) });
   menu(r.left, r.bottom + 4, entries); };
 $('#new-session').onclick = () => act({ type: 'new_session' });
+document.querySelectorAll('#modes .seg').forEach(b => b.onclick = () => act({ type: 'set_mode', mode: b.dataset.mode }));
+$('#perm-btn').onclick = (ev) => { ev.stopPropagation(); const r = $('#perm-btn').getBoundingClientRect();
+  const items = [['ask', 'Ask', 'Every write and command asks'], ['smart', 'Smart', 'Rules, then the on-device model; asks for the rest'], ['full', 'Full auto', 'Nothing asks. For throwaway worktrees.']]
+    .map(([k, l, d]) => ({ label: l, sub: d, on: S.permission === k, run: () => act({ type: 'set_permission', permission: k }) }));
+  items.push({ sep: true }, { label: S.trusted ? 'Untrust this workspace' : 'Trust this workspace (its scripts may run)', run: () => act({ type: 'set_trust', trusted: !S.trusted }) });
+  menu(r.left, r.bottom + 4, items); };
 $('#new-worktree').onclick = () => { const b = prompt('Branch name for the worktree'); if (b) act({ type: 'new_session', worktree: b }); };
 $('#context').onclick = () => act({ type: 'compact' });
 $('#stop').onclick = () => act({ type: 'stop' });
@@ -252,7 +277,7 @@ function openTools() {
 
 /* ---------- events ---------- */
 function applyState(s) {
-  const structural = !S || S.timeline.length !== s.timeline.length || !S.current || !s.current || S.current.id !== s.current.id || S.busy !== s.busy;
+  const structural = !S || S.timeline.length !== s.timeline.length || !S.current || !s.current || S.current.id !== s.current.id || S.busy !== s.busy || S.mode !== s.mode;
   S = s; renderSessions(); renderChrome(); renderPulls();
   if (structural) renderTimeline();
 }

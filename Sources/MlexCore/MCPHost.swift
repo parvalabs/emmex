@@ -133,6 +133,11 @@ public struct MCPTool: FoundationModels.Tool {
         self.ctx = ctx
     }
 
+    static func looksMutating(_ tool: String) -> Bool {
+        let t = tool.lowercased()
+        return ["write", "delete", "remove", "move", "create", "edit", "update", "run", "execute", "send", "post", "put", "patch", "push", "deploy", "install"].contains { t.contains($0) }
+    }
+
     static func sanitize(_ s: String) -> String {
         String(s.map { $0.isLetter || $0.isNumber || $0 == "_" ? $0 : "_" })
     }
@@ -140,6 +145,11 @@ public struct MCPTool: FoundationModels.Tool {
     public func call(arguments: GeneratedContent) async throws -> String {
         let value = try JSONSchema.value(from: arguments)
         ctx.report(.toolCall(name: name, arguments: String(arguments.jsonString.prefix(300))))
+        if let policy = ctx.policy, await policy.level == .ask || Self.looksMutating(remoteName) {
+            if await policy.level != .full, let refusal = await ctx.gate(.init(id: UUID().uuidString, tool: name, summary: "\(name) \(arguments.jsonString.prefix(120))", command: nil, paths: [])) {
+                ctx.report(.toolResult(name: name, output: refusal)); return refusal
+            }
+        }
         let result = ctx.clip(try await connection.call(remoteName, arguments: value.objectValue ?? [:]))
         ctx.report(.toolResult(name: name, output: result))
         return result

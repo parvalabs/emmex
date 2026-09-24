@@ -31,6 +31,10 @@
         <span id="title" class="title" title="Double-click to rename"></span>
         <span id="worktree" class="badge hidden"></span>
       </div>
+      <div class="modes" id="modes">
+        <button data-mode="chat" class="seg">Chat</button><button data-mode="code" class="seg on">Code</button>
+      </div>
+      <button id="perm-btn" class="chip" title="Permission level for tool calls"><span id="perm-label">Smart</span><span class="chev">⌄</span></button>
       <button id="context" class="ctx hidden" title="Context used. Click to compact.">
         <svg viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="6" class="ring-bg"/><circle id="ring" cx="8" cy="8" r="6" class="ring-fg"/></svg>
         <span id="ctx-pct">0%</span>
@@ -44,6 +48,7 @@
     <div class="composer-wrap">
       <div id="suggest" class="suggest hidden"></div>
       <div id="queue" class="queue hidden"></div>
+      <div id="approvals"></div>
       <div id="composer" class="composer">
         <textarea id="input" rows="1" placeholder="How can I help?  Type / for skills and templates"></textarea>
         <div class="bar">
