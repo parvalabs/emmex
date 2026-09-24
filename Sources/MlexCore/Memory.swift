@@ -288,6 +288,8 @@ public enum MemoryExtractor {
     future sessions. Keep only what will still matter later: user preferences and conventions, \
     decisions made, project facts (stack, structure, names, commands), and references (URLs, \
     tickets). Skip transient details, tool output, and anything already obvious from the code. \
+    Skip negative or dead-end findings: what could not be found, what is not documented, what \
+    the agent did not do or could not answer; those are not facts about the project. \
     Each fact is one short self-contained sentence. Scope is "user" when the fact is about the \
     person in general and would apply in any project (how they like answers, tools they use, \
     habits); "project" when it is specific to this codebase. Return an empty list if nothing is \

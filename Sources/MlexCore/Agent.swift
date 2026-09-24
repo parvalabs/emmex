@@ -39,9 +39,11 @@ public final class AgentSession: @unchecked Sendable {
     You are mlex, a coding agent working in the user's project directory. Tools let you inspect \
     and change files and run commands. Use a tool only when the request needs information from \
     the project or asks for a change or a command; for conversation, questions you can answer \
-    directly, or instructions like "say X", reply in text without tools. Run one command per tool \
-    call and read its output before deciding the next step. Never use interactive commands. Be \
-    terse and concrete.
+    directly, or instructions like "say X", reply in text without tools. When asked about the \
+    project or its code, look before answering: list the directory and read the relevant files. \
+    Reading is free of side effects, so never ask permission to explore; just do it and report \
+    what you found. Run one command per tool call and read its output before deciding the next \
+    step. Never use interactive commands. Be terse and concrete.
     """
 
     /// Start a new session in `workspace` (tools run in `cwd`, which defaults to the workspace).
@@ -138,7 +140,13 @@ public final class AgentSession: @unchecked Sendable {
         guard spec == .auto else { return }
         let recent = session.transcript.suffix(4).map(Compactor.render).joined(separator: "\n").suffix(600)
         do {
-            let decision = try await router.route(.init(prompt: prompt, recent: String(recent), tools: toolNames))
+            let previous = lastRoute?.tier ?? record.routes.last?.tier.flatMap(Tier.init(rawValue:))
+            let decision: RouteDecision
+            if let (tier, why) = RoutingFloor.continuation(prompt: prompt, previous: previous) {
+                decision = RouteDecision(tier: tier, reason: why, confidence: 0.9, router: "floor")
+            } else {
+                decision = try await router.route(.init(prompt: prompt, recent: String(recent), tools: toolNames))
+            }
             lastRoute = decision
             let resolver = await TierResolver.current()
             let target = resolver.spec(for: decision.tier)

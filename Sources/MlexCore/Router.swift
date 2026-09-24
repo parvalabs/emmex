@@ -56,6 +56,24 @@ public enum RoutingFloor {
     }
 
     static let order: [Tier] = [.local, .cheap, .frontier]
+
+    static let affirmations: Set<String> = ["yes", "y", "yep", "yeah", "yes please", "ok", "okay", "sure", "go", "go ahead", "do it", "proceed",
+                                            "continue", "go on", "please", "please do", "sounds good", "fine", "correct", "right", "that's right", "affirmative", "do that", "do so"]
+    static let backReferences = ["previous question", "your question", "you asked", "as i said", "answering yes", "last message", "what you proposed", "what you suggested"]
+
+    /// A bare "yes" answers whatever the assistant just offered, so it needs at least the tier
+    /// that offer implied: never below the previous turn's tier, and never local (an offer to
+    /// do work means tools). Returns nil for prompts that stand on their own.
+    public static func continuation(prompt: String, previous: Tier?) -> (Tier, String)? {
+        let l = prompt.lowercased().trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: .punctuationCharacters)
+        let words = l.split(whereSeparator: { $0 == " " || $0 == "," }).map { $0.trimmingCharacters(in: .punctuationCharacters) }
+        let affirmative = affirmations.contains(l) || (words.count <= 6 && words.first.map { affirmations.contains($0) } == true)
+        let refersBack = words.count <= 20 && backReferences.contains { l.contains($0) }
+        guard affirmative || refersBack else { return nil }
+        let floor = order[max(order.firstIndex(of: previous ?? .cheap)!, 1)]
+        return (floor, affirmative ? "continues the previous turn" : "refers back to the previous turn")
+    }
+
     public static func apply(_ d: RouteDecision, prompt: String) -> RouteDecision {
         guard let (min, why) = minimumTier(for: prompt), order.firstIndex(of: min)! > order.firstIndex(of: d.tier)! else { return d }
         var e = d; e.tier = min; e.reason = "escalated (\(why)); router said \(d.tier.rawValue): \(d.reason)"; e.confidence = max(d.confidence, 0.8)
@@ -80,6 +98,7 @@ public struct OnDeviceRouter: Router {
         cheap: \(TierGuide.cheap).
         frontier: \(TierGuide.frontier).
         Prefer the cheaper tier when unsure between two. Ignore the wording's length; judge the work required.
+        A short reply such as "yes" answers the assistant's last question in the recent context: route by the work that answer sets in motion.
         """)
         let prompt = "Recent context: \(req.recent.isEmpty ? "(none)" : req.recent)\n\nRequest: \(req.prompt)"
         let r = try await session.respond(to: prompt, schema: schema, options: GenerationOptions(maximumResponseTokens: 80))
