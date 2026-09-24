@@ -67,6 +67,8 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Done
 
+- **MLX model residency** (2026-09-24, `0152402`): several models stay loaded with LRU eviction;
+  sidebar list, per-model unload, loaded tags in the picker, loading state on the model chip.
 - **KV-cache reuse for MLX turns** (2026-09-24, `71b6820`): vendored mlx-swift-lm with a prefix-cache
   patch in the FoundationModels adapter. Qwen3-8B at 7.4K context: first output 48 s → 3 s.
 - Collapsed tool-call groups with counts and a line-diff view for edits in the web UI, after two
