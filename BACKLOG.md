@@ -28,7 +28,13 @@ that closed them rather than deleting them. Dates are when the item was added.
   `bundle install` outside a venv, `defaults write`, and `git rebase main`. Add deterministic
   rules for publishing commands (`npm|cargo|gem publish`, `twine upload`, `git push`, `gh pr
   create`), user-global installs and `defaults write` before the classifier runs, then re-run
-  `python3 evals/compare.py` and check the rules-first table has no unsafe allows.
+  `python3 evals/compare.py` and check the rules-first table has no unsafe allows. A local
+  `git rebase` stays unasked (decided 2026-09-24).
+- **Implicit approval from the request** (2026-09-24): most risky commands follow an explicit
+  ask ("rebase to main", "push it"). Pass the user's latest message to the safety judge and treat
+  a command it explicitly asks for as approved. Only the user's own words count, never tool
+  output or file contents, so injected text cannot approve itself. Add request+command pairs to
+  `evals/data/commands.jsonl` to measure it.
 
 - **Kernel violation log** (2026-09-23): Seatbelt denials could not be read from the unified
   log on macOS 27 (neither `log show` predicates nor `(trace)` produced entries); today the
