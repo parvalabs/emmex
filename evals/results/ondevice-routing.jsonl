@@ -1,0 +1,94 @@
+{"confidence":0.90000000000000002,"floored":"local","id":"r001","ms":2051.9959926605225,"pred":"local","reason":"Simple greeting"}
+{"confidence":0.40000000000000002,"floored":"cheap","id":"r002","ms":677.15001106262207,"pred":"cheap","reason":"Simple acknowledgment"}
+{"confidence":0.90000000000000002,"floored":"local","id":"r003","ms":985.36503314971924,"pred":"local","reason":"Greeting is simple and doesn't require complex processing"}
+{"confidence":0.69999999999999996,"floored":"local","id":"r004","ms":843.02103519439697,"pred":"local","reason":"Answer simple questions and read files"}
+{"confidence":0.90000000000000002,"floored":"local","id":"r005","ms":684.18896198272705,"pred":"local","reason":"Simple confirmation required"}
+{"confidence":0.90000000000000002,"floored":"local","id":"r006","ms":919.74401473999023,"pred":"local","reason":"Structs are value types, classes are reference types."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r007","ms":985.87095737457275,"pred":"local","reason":"HTTP 409 means 'Conflict', indicating a resource already exists."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r008","ms":1100.4809141159058,"pred":"local","reason":"Mutex is a synchronization tool that ensures exclusive access to a resource by multiple threads."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r009","ms":1330.8000564575195,"pred":"local","reason":"Vim can be exited by pressing `Esc` and then `q` or `Ctrl+W`."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r010","ms":728.12700271606445,"pred":"local","reason":"Australia's capital is Canberra."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r011","ms":887.68506050109863,"pred":"local","reason":"Commits involve changes, messages, and history"}
+{"confidence":0.90000000000000002,"floored":"local","id":"r012","ms":1026.0159969329834,"pred":"local","reason":"File modification date is directly readable from the file system."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r013","ms":692.6569938659668,"pred":"local","reason":"file row count query"}
+{"confidence":0.90000000000000002,"floored":"local","id":"r014","ms":784.15107727050781,"pred":"local","reason":"Branch information is available locally"}
+{"confidence":0.90000000000000002,"floored":"local","id":"r015","ms":686.34796142578125,"pred":"local","reason":"Git history retrieval"}
+{"confidence":0.90000000000000002,"floored":"local","id":"r016","ms":843.31393241882324,"pred":"local","reason":"Repository scan confirms README file exists"}
+{"confidence":0.90000000000000002,"floored":"local","id":"r017","ms":849.17104244232178,"pred":"local","reason":"File size check via shell command"}
+{"confidence":0.90000000000000002,"floored":"local","id":"r018","ms":753.58593463897705,"pred":"local","reason":"File content requested."}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r019","ms":854.30502891540527,"pred":"local","reason":"Direct file listing in local context"}
+{"confidence":0.69999999999999996,"floored":"local","id":"r020","ms":814.88394737243652,"pred":"local","reason":"Package version is not specified in context."}
+{"confidence":0.69999999999999996,"floored":"local","id":"r021","ms":726.2730598449707,"pred":"local","reason":"Git status indicates changes exist."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r022","ms":915.6949520111084,"pred":"local","reason":"Git tag information is easily accessible via a shell command."}
+{"confidence":0.40000000000000002,"floored":"cheap","id":"r023","ms":831.56991004943848,"pred":"cheap","reason":"I cannot determine authorship without additional context."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r024","ms":772.24195003509521,"pred":"local","reason":"File count from Sources directory"}
+{"confidence":0.90000000000000002,"floored":"local","id":"r025","ms":910.18390655517578,"pred":"local","reason":"The file is small and the task is straightforward."}
+{"confidence":0.69999999999999996,"floored":"local","id":"r026","ms":1007.8710317611694,"pred":"local","reason":"Mlex typically serves on port 8080 by default."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r027","ms":815.55497646331787,"pred":"local","reason":"Simple string search in current context"}
+{"confidence":0.90000000000000002,"floored":"local","id":"r028","ms":786.87596321105957,"pred":"local","reason":"simple file read and count"}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r029","ms":791.21899604797363,"pred":"cheap","reason":"Standard branch rebase and push."}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r030","ms":772.0329761505127,"pred":"cheap","reason":"Staged changes require a conventional commit."}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r031","ms":661.92400455474854,"pred":"cheap","reason":"Routine test execution"}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r032","ms":788.20395469665527,"pred":"cheap","reason":"Simple rename across files"}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r033","ms":818.83394718170166,"pred":"cheap","reason":"Simple version bump and commit."}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r034","ms":967.40996837615967,"pred":"cheap","reason":"Swift formatting is a standard task best handled locally with minimal overhead."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r035","ms":805.93597888946533,"pred":"local","reason":"This is a straightforward git operation."}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r036","ms":787.05894947052002,"pred":"cheap","reason":"Simple file addition and commit"}
+{"confidence":0.69999999999999996,"floored":"frontier","id":"r037","ms":883.66198539733887,"pred":"frontier","reason":"Merging and deleting branches require real reasoning."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r038","ms":810.82594394683838,"pred":"local","reason":"Compaction.swift summarizes a file's content."}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r039","ms":662.01198101043701,"pred":"cheap","reason":"Simple typo fix"}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r040","ms":858.70099067687988,"pred":"cheap","reason":"Adding a simple flag is routine."}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r041","ms":672.15609550476074,"pred":"cheap","reason":"Simple file relocation"}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r042","ms":1102.3110151290894,"pred":"cheap","reason":"Automated log parsing and changelog generation is best handled by the cheapest tier."}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r043","ms":1078.3120393753052,"pred":"cheap","reason":"Squashing last 4 commits is a common local operation."}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r044","ms":643.64898204803467,"pred":"cheap","reason":"Simple text update"}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r045","ms":1095.2910184860229,"pred":"cheap","reason":"Cherry-picking a single commit is a routine task best handled with the cheapest tier."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r046","ms":801.9099235534668,"pred":"local","reason":"Simple build and warning fix"}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r047","ms":1143.3860063552856,"pred":"cheap","reason":"Writing a simple unit test for a specific function with a clear input pattern."}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r048","ms":898.73802661895752,"pred":"cheap","reason":"Simple file conversion fits cheap tier."}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r049","ms":924.30806159973145,"pred":"cheap","reason":"Simple file-level modification with defined path."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r050","ms":787.08398342132568,"pred":"local","reason":"Simple local UI adjustment."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r051","ms":985.06104946136475,"pred":"frontier","reason":"Requires multi-file refactoring and real-world impact assessment"}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r052","ms":1064.6690130233765,"pred":"cheap","reason":"Merge conflict resolution with both sides preserved is routine and well-defined."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r053","ms":907.11796283721924,"pred":"frontier","reason":"Race condition in MLX model load requires deep analysis and fix."}
+{"confidence":0.69999999999999996,"floored":"frontier","id":"r054","ms":863.44397068023682,"pred":"frontier","reason":"Potential crash due to unhandled error on launch"}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r055","ms":934.66103076934814,"pred":"frontier","reason":"Complex design requiring multi-file refactoring and real-world judgment"}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r056","ms":1008.0219507217407,"pred":"frontier","reason":"Refactoring complex types involves complex logic and potential side effects."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r057","ms":884.93704795837402,"pred":"frontier","reason":"Requires complex design and judgment for eviction strategy."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r058","ms":962.26298809051514,"pred":"frontier","reason":"Sandbox escape involves security risks needing deep analysis"}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r059","ms":1012.3299360275269,"pred":"frontier","reason":"Debugging a crash in a complex system requires deep reasoning."}
+{"confidence":0.69999999999999996,"floored":"frontier","id":"r060","ms":963.22298049926758,"pred":"frontier","reason":"Web UI migration involves complex architectural trade-offs beyond routine adjustments."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r061","ms":837.42201328277588,"pred":"frontier","reason":"Requires complex logic for tool interruption."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r062","ms":1121.1740970611572,"pred":"frontier","reason":"This involves complex state transitions, error handling, and user-specific migration logic."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r063","ms":902.23002433776855,"pred":"frontier","reason":"Prefill latency stems from asynchronous data fetching and inefficient caching."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r064","ms":906.53896331787109,"pred":"frontier","reason":"This involves complex networking design with reconnection and backpressure."}
+{"confidence":0.69999999999999996,"floored":"cheap","id":"r065","ms":1002.561092376709,"pred":"cheap","reason":"Scanning for policy bypass commands in Permissions.swift"}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r066","ms":840.39497375488281,"pred":"frontier","reason":"Design demands complex relationships and logic"}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r067","ms":980.65900802612305,"pred":"frontier","reason":"Debugging a flaky test requires deep analysis and real-time reasoning."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r068","ms":1023.94700050354,"pred":"frontier","reason":"Streaming output with progress for long commands requires complex integration."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r069","ms":885.63096523284912,"pred":"frontier","reason":"Redesigning floor rules for debugging questions requires complex judgment."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r070","ms":1306.2500953674316,"pred":"frontier","reason":"Porting a complex ML framework like ModernBERT to MLX Swift requires extensive, real-time debugging and architectural judgment"}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r071","ms":1000.7609128952026,"pred":"frontier","reason":"This involves complex security implementation beyond routine work"}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r072","ms":852.56290435791016,"pred":"frontier","reason":"Memory retrieval may fail due to ambiguous data or faulty indexing."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r073","ms":890.74397087097168,"pred":"frontier","reason":"Security review involves complex, high-stakes judgment."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r074","ms":898.36108684539795,"pred":"frontier","reason":"Multi-window support with individual workspaces requires complex architecture."}
+{"confidence":0.69999999999999996,"floored":"cheap","id":"r075","ms":809.80789661407471,"pred":"cheap","reason":"Simple optimization possible with cheap tier tools"}
+{"confidence":0.90000000000000002,"floored":"local","id":"r076","ms":804.45098876953125,"pred":"local","reason":"Simple cleanup of a single file."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r077","ms":821.26998901367188,"pred":"frontier","reason":"Debugging a bug requires complex reasoning."}
+{"confidence":0.69999999999999996,"floored":"frontier","id":"r078","ms":862.65599727630615,"pred":"frontier","reason":"UI improvements require complex design reasoning."}
+{"confidence":0.40000000000000002,"floored":"cheap","id":"r079","ms":904.35194969177246,"pred":"cheap","reason":"No prior discussion or task was established."}
+{"confidence":0.69999999999999996,"floored":"frontier","id":"r080","ms":902.76694297790527,"pred":"cheap","reason":"Optimization is routine and can be handled cheaply."}
+{"confidence":0.69999999999999996,"floored":"frontier","id":"r081","ms":819.76795196533203,"pred":"frontier","reason":"Debugging a broken feature."}
+{"confidence":0.69999999999999996,"floored":"cheap","id":"r082","ms":952.42202281951904,"pred":"cheap","reason":"Tests failing, run basic checks and fix."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r083","ms":720.1380729675293,"pred":"local","reason":"Exploring the project structure directly"}
+{"confidence":0.69999999999999996,"floored":"frontier","id":"r084","ms":937.32500076293945,"pred":"frontier","reason":"Refactoring requires complex logic and potential side effects."}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r085","ms":902.92191505432129,"pred":"cheap","reason":"Feature rebase and push is a routine task."}
+{"confidence":0.90000000000000002,"floored":"frontier","id":"r086","ms":888.11397552490234,"pred":"frontier","reason":"Redesigning permission layering involves complex logic and structural changes."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r087","ms":929.34596538543701,"pred":"local","reason":"The file is local and the task is straightforward."}
+{"confidence":0.69999999999999996,"floored":"local","id":"r088","ms":922.28305339813232,"pred":"local","reason":"User requested a different file, not Package.swift"}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r089","ms":892.13204383850098,"pred":"cheap","reason":"Simple cleanup task with clear output"}
+{"confidence":0.40000000000000002,"floored":"cheap","id":"r090","ms":727.02300548553467,"pred":"cheap","reason":"Tool output structure mismatch"}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r091","ms":835.85405349731445,"pred":"cheap","reason":"Routine multi-step work: run tests"}
+{"confidence":0.69999999999999996,"floored":"local","id":"r092","ms":815.54102897644043,"pred":"local","reason":"Build issue with type 'SandboxProfile'"}
+{"confidence":0.90000000000000002,"floored":"cheap","id":"r093","ms":1022.2929716110229,"pred":"cheap","reason":"Add PromptCacheEntry per model, trim prefix, feed suffix, invalidate on errors."}
+{"confidence":0.90000000000000002,"floored":"local","id":"r094","ms":713.22298049926758,"pred":"local","reason":"Simple acknowledgment"}

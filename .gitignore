@@ -5,3 +5,7 @@ DerivedData/
 .DS_Store
 .env
 .claude/settings.local.json
+
+# evals
+evals/.venv/
+__pycache__/

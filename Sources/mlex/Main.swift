@@ -11,7 +11,7 @@ import MlexServer
     }
     static let configuration = CommandConfiguration(
         abstract: "mlex: local-first agent on Apple Foundation Models, MLX models, and Claude.",
-        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self, MemoryCmd.self, Serve.self, Trust.self, Policy.self, SandboxCmd.self, RouteCmd.self],
+        subcommands: [Models.self, Run.self, Chat.self, Sessions.self, WorktreesCmd.self, MCPCmd.self, MemoryCmd.self, Serve.self, Trust.self, Policy.self, SandboxCmd.self, RouteCmd.self, EvalCmd.self],
         defaultSubcommand: Chat.self)
 }
 
@@ -257,6 +257,56 @@ struct RouteCmd: AsyncParsableCommand {
         let d = try await TierResolver.makeRouter().route(.init(prompt: p, recent: "", tools: []))
         let spec = await TierResolver.current().spec(for: d.tier)
         print("\(d.tier.rawValue) → \(spec)  (\(d.router), \(Int(d.confidence * 100))%) \(d.reason)")
+    }
+}
+
+// MARK: eval (debug)
+
+struct EvalCmd: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "eval", abstract: "Debug: label and run the routing and safety eval sets in evals/.",
+                                                    subcommands: [Label.self, RunOnDevice.self])
+
+    static func read<T: Decodable>(_ path: String, as: T.Type) throws -> [T] {
+        try String(contentsOfFile: path, encoding: .utf8).split(separator: "\n").filter { !$0.isEmpty }
+            .map { try JSONDecoder().decode(T.self, from: Data($0.utf8)) }
+    }
+    static func write<T: Encodable>(_ items: [T], to path: String) throws {
+        let enc = JSONEncoder(); enc.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        try (items.map { String(decoding: try enc.encode($0), as: UTF8.self) }.joined(separator: "\n") + "\n").write(toFile: path, atomically: true, encoding: .utf8)
+    }
+    static func writeRows(_ rows: [[String: Any]], to path: String) throws {
+        let lines = try rows.map { String(decoding: try JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys, .withoutEscapingSlashes]), as: UTF8.self) }
+        try (lines.joined(separator: "\n") + "\n").write(toFile: path, atomically: true, encoding: .utf8)
+    }
+
+    struct Label: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Label items that have no label yet, in place, with a strong model.")
+        @Option(name: .long) var model: String = "claude:opus5_5"
+        @Option(name: .long) var dir: String = "evals/data"
+        func run() async throws {
+            let spec = try ModelSpec(parsing: model)
+            let rp = dir + "/routing.jsonl", cp = dir + "/commands.jsonl"
+            let routes = try await EvalHarness.labelRoutes(try EvalCmd.read(rp, as: EvalHarness.RouteItem.self), spec: spec)
+            try EvalCmd.write(routes, to: rp)
+            let cmds = try await EvalHarness.labelCommands(try EvalCmd.read(cp, as: EvalHarness.CommandItem.self), spec: spec)
+            try EvalCmd.write(cmds, to: cp)
+            func counts(_ l: [String?]) -> String { Dictionary(grouping: l.compactMap { $0 }, by: { $0 }).map { "\($0.key)=\($0.value.count)" }.sorted().joined(separator: " ") }
+            print("routing: \(counts(routes.map(\.label)))\ncommands: \(counts(cmds.map(\.label)))")
+        }
+    }
+
+    struct RunOnDevice: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(commandName: "run", abstract: "Run the on-device router and safety classifier over the eval sets.")
+        @Option(name: .long) var dir: String = "evals"
+        func run() async throws {
+            let routes = try EvalCmd.read(dir + "/data/routing.jsonl", as: EvalHarness.RouteItem.self)
+            try EvalCmd.writeRows(await EvalHarness.runOnDeviceRouter(routes), to: dir + "/results/ondevice-routing.jsonl")
+            let cmds = try EvalCmd.read(dir + "/data/commands.jsonl", as: EvalHarness.CommandItem.self)
+            let ws = FileManager.default.temporaryDirectory.appending(path: "mlex-eval-ws")
+            try? FileManager.default.createDirectory(at: ws, withIntermediateDirectories: true)
+            try EvalCmd.writeRows(await EvalHarness.runOnDeviceSafety(cmds, workspace: ws), to: dir + "/results/ondevice-commands.jsonl")
+            print("wrote \(dir)/results/ondevice-routing.jsonl and ondevice-commands.jsonl")
+        }
     }
 }
 

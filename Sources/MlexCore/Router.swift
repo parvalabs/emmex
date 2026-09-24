@@ -22,10 +22,10 @@ public protocol Router: Sendable {
 }
 
 /// The tier definitions shared by every router, so decisions mean the same thing everywhere.
-enum TierGuide {
-    static let local = "conversation, greetings, simple questions answerable directly or with one file read or one shell command (file dates, row counts, git status)"
-    static let cheap = "routine multi-step but well-defined work: run tests, rebase/commit, rename or move things, small localized edits, summarize a file"
-    static let frontier = "anything needing real reasoning or judgment: debugging, design decisions, multi-file refactors, ambiguous or high-stakes requests, writing substantial new code"
+public enum TierGuide {
+    public static let local = "conversation, greetings, simple questions answerable directly or with one file read or one shell command (file dates, row counts, git status)"
+    public static let cheap = "routine multi-step but well-defined work: run tests, rebase/commit, rename or move things, small localized edits, summarize a file"
+    public static let frontier = "anything needing real reasoning or judgment: debugging, design decisions, multi-file refactors, ambiguous or high-stakes requests, writing substantial new code"
 }
 
 /// Deterministic floors applied after any router: a small classifier under-escalates judgment
@@ -84,7 +84,9 @@ public enum RoutingFloor {
 /// Apple's on-device model as the classifier: guided generation with an enum, so the output is
 /// always one of the tiers. About one to two seconds per decision, offline.
 public struct OnDeviceRouter: Router {
-    public init() {}
+    /// false returns the model's own decision, without the deterministic floor (for evals).
+    public var applyFloor: Bool
+    public init(applyFloor: Bool = true) { self.applyFloor = applyFloor }
 
     public func route(_ req: RouteRequest) async throws -> RouteDecision {
         let schema = try GenerationSchema(root: DynamicGenerationSchema(name: "Route", properties: [
@@ -109,7 +111,8 @@ public struct OnDeviceRouter: Router {
         let confidence: Double = ["low": 0.4, "medium": 0.7, "high": 0.9][conf] ?? 0.4
         // A small model's low-confidence "local" is the dangerous case; escalate one step.
         if confidence < 0.5, tier == .local { tier = .cheap }
-        return RoutingFloor.apply(.init(tier: tier, reason: reason, confidence: confidence, router: "ondevice"), prompt: req.prompt)
+        let decision = RouteDecision(tier: tier, reason: reason, confidence: confidence, router: "ondevice")
+        return applyFloor ? RoutingFloor.apply(decision, prompt: req.prompt) : decision
     }
 }
 

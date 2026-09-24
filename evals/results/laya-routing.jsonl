@@ -1,0 +1,188 @@
+{"confidence": 0.4158, "id": "r001", "ms": 50.31104199588299, "pred": "local", "probs": {"cheap": 0.3298, "frontier": 0.2545, "local": 0.4158}, "variant": "tier"}
+{"confidence": 0.5244, "id": "r001", "ms": 75.73954100371338, "pred": "local", "score": 1.0013, "variant": "preset"}
+{"confidence": 0.3836, "id": "r002", "ms": 49.95266700279899, "pred": "cheap", "probs": {"cheap": 0.3836, "frontier": 0.2866, "local": 0.3298}, "variant": "tier"}
+{"confidence": 0.6629, "id": "r002", "ms": 32.728209014749154, "pred": "local", "score": 0.8533, "variant": "preset"}
+{"confidence": 0.4371, "id": "r003", "ms": 50.07912500877865, "pred": "local", "probs": {"cheap": 0.3239, "frontier": 0.239, "local": 0.4371}, "variant": "tier"}
+{"confidence": 0.589, "id": "r003", "ms": 32.89979099645279, "pred": "local", "score": 1.1109, "variant": "preset"}
+{"confidence": 0.3754, "id": "r004", "ms": 50.22749997442588, "pred": "local", "probs": {"cheap": 0.2972, "frontier": 0.3275, "local": 0.3754}, "variant": "tier"}
+{"confidence": 0.7339, "id": "r004", "ms": 33.581499999854714, "pred": "local", "score": 1.0294, "variant": "preset"}
+{"confidence": 0.5108, "id": "r005", "ms": 51.25537500134669, "pred": "cheap", "probs": {"cheap": 0.5108, "frontier": 0.1741, "local": 0.3151}, "variant": "tier"}
+{"confidence": 0.633, "id": "r005", "ms": 34.53816700493917, "pred": "local", "score": 0.9344, "variant": "preset"}
+{"confidence": 0.388, "id": "r006", "ms": 52.39675001939759, "pred": "frontier", "probs": {"cheap": 0.3485, "frontier": 0.388, "local": 0.2635}, "variant": "tier"}
+{"confidence": 0.415, "id": "r006", "ms": 35.512291971826926, "pred": "cheap", "score": 1.858, "variant": "preset"}
+{"confidence": 0.384, "id": "r007", "ms": 52.31245901086368, "pred": "local", "probs": {"cheap": 0.3525, "frontier": 0.2634, "local": 0.384}, "variant": "tier"}
+{"confidence": 0.4476, "id": "r007", "ms": 35.111207980662584, "pred": "local", "score": 1.5094, "variant": "preset"}
+{"confidence": 0.386, "id": "r008", "ms": 51.66733299847692, "pred": "cheap", "probs": {"cheap": 0.386, "frontier": 0.2545, "local": 0.3594}, "variant": "tier"}
+{"confidence": 0.5174, "id": "r008", "ms": 35.172916017472744, "pred": "local", "score": 0.7515, "variant": "preset"}
+{"confidence": 0.4642, "id": "r009", "ms": 51.663125021150336, "pred": "cheap", "probs": {"cheap": 0.4642, "frontier": 0.2098, "local": 0.326}, "variant": "tier"}
+{"confidence": 0.4211, "id": "r009", "ms": 33.71324998443015, "pred": "cheap", "score": 1.5286, "variant": "preset"}
+{"confidence": 0.4865, "id": "r010", "ms": 50.50937502528541, "pred": "cheap", "probs": {"cheap": 0.4865, "frontier": 0.2594, "local": 0.2541}, "variant": "tier"}
+{"confidence": 0.4816, "id": "r010", "ms": 33.56587499729358, "pred": "local", "score": 1.1882, "variant": "preset"}
+{"confidence": 0.4085, "id": "r011", "ms": 51.259790983749554, "pred": "local", "probs": {"cheap": 0.311, "frontier": 0.2805, "local": 0.4085}, "variant": "tier"}
+{"confidence": 0.4593, "id": "r011", "ms": 35.58454097947106, "pred": "local", "score": 1.4582, "variant": "preset"}
+{"confidence": 0.4948, "id": "r012", "ms": 51.69520899653435, "pred": "cheap", "probs": {"cheap": 0.4948, "frontier": 0.2738, "local": 0.2315}, "variant": "tier"}
+{"confidence": 0.5644, "id": "r012", "ms": 35.013207991141826, "pred": "local", "score": 1.323, "variant": "preset"}
+{"confidence": 0.5091, "id": "r013", "ms": 54.035708017181605, "pred": "cheap", "probs": {"cheap": 0.5091, "frontier": 0.1587, "local": 0.3322}, "variant": "tier"}
+{"confidence": 0.6006, "id": "r013", "ms": 34.958292002556846, "pred": "local", "score": 1.0482, "variant": "preset"}
+{"confidence": 0.4745, "id": "r014", "ms": 52.389916992979124, "pred": "local", "probs": {"cheap": 0.2721, "frontier": 0.2535, "local": 0.4745}, "variant": "tier"}
+{"confidence": 0.6055, "id": "r014", "ms": 34.12770800059661, "pred": "local", "score": 1.1611, "variant": "preset"}
+{"confidence": 0.5264, "id": "r015", "ms": 51.93962500197813, "pred": "cheap", "probs": {"cheap": 0.5264, "frontier": 0.2164, "local": 0.2573}, "variant": "tier"}
+{"confidence": 0.5862, "id": "r015", "ms": 36.80820899899118, "pred": "local", "score": 1.2824, "variant": "preset"}
+{"confidence": 0.6088, "id": "r016", "ms": 51.76066601416096, "pred": "local", "probs": {"cheap": 0.2805, "frontier": 0.1107, "local": 0.6088}, "variant": "tier"}
+{"confidence": 0.4978, "id": "r016", "ms": 36.941416998161, "pred": "local", "score": 1.3187, "variant": "preset"}
+{"confidence": 0.5648, "id": "r017", "ms": 52.14791701291688, "pred": "cheap", "probs": {"cheap": 0.5648, "frontier": 0.2108, "local": 0.2244}, "variant": "tier"}
+{"confidence": 0.6072, "id": "r017", "ms": 35.4521669796668, "pred": "local", "score": 0.9942, "variant": "preset"}
+{"confidence": 0.3798, "id": "r018", "ms": 55.92058299225755, "pred": "local", "probs": {"cheap": 0.3099, "frontier": 0.3103, "local": 0.3798}, "variant": "tier"}
+{"confidence": 0.4458, "id": "r018", "ms": 33.101624983828515, "pred": "local", "score": 1.3203, "variant": "preset"}
+{"confidence": 0.3874, "id": "r019", "ms": 50.23333299322985, "pred": "cheap", "probs": {"cheap": 0.3874, "frontier": 0.2827, "local": 0.3298}, "variant": "tier"}
+{"confidence": 0.4132, "id": "r019", "ms": 33.27879201970063, "pred": "local", "score": 1.2523, "variant": "preset"}
+{"confidence": 0.4021, "id": "r020", "ms": 50.550540996482596, "pred": "cheap", "probs": {"cheap": 0.4021, "frontier": 0.2802, "local": 0.3177}, "variant": "tier"}
+{"confidence": 0.5019, "id": "r020", "ms": 34.76291598053649, "pred": "local", "score": 1.3333, "variant": "preset"}
+{"confidence": 0.4232, "id": "r021", "ms": 51.57212499761954, "pred": "cheap", "probs": {"cheap": 0.4232, "frontier": 0.2665, "local": 0.3102}, "variant": "tier"}
+{"confidence": 0.6534, "id": "r021", "ms": 34.25658299238421, "pred": "local", "score": 1.2463, "variant": "preset"}
+{"confidence": 0.4353, "id": "r022", "ms": 52.67562498920597, "pred": "local", "probs": {"cheap": 0.356, "frontier": 0.2086, "local": 0.4353}, "variant": "tier"}
+{"confidence": 0.5527, "id": "r022", "ms": 35.51054201670922, "pred": "local", "score": 0.9759, "variant": "preset"}
+{"confidence": 0.4713, "id": "r023", "ms": 52.5494159955997, "pred": "cheap", "probs": {"cheap": 0.4713, "frontier": 0.2665, "local": 0.2622}, "variant": "tier"}
+{"confidence": 0.6613, "id": "r023", "ms": 35.16504098661244, "pred": "local", "score": 1.2916, "variant": "preset"}
+{"confidence": 0.4499, "id": "r024", "ms": 53.946875006658956, "pred": "cheap", "probs": {"cheap": 0.4499, "frontier": 0.2539, "local": 0.2962}, "variant": "tier"}
+{"confidence": 0.5848, "id": "r024", "ms": 34.56975001608953, "pred": "local", "score": 1.1613, "variant": "preset"}
+{"confidence": 0.505, "id": "r025", "ms": 52.23312499583699, "pred": "cheap", "probs": {"cheap": 0.505, "frontier": 0.2007, "local": 0.2943}, "variant": "tier"}
+{"confidence": 0.5346, "id": "r025", "ms": 33.58858299907297, "pred": "local", "score": 0.9647, "variant": "preset"}
+{"confidence": 0.4336, "id": "r026", "ms": 50.76491698855534, "pred": "cheap", "probs": {"cheap": 0.4336, "frontier": 0.2823, "local": 0.2841}, "variant": "tier"}
+{"confidence": 0.5427, "id": "r026", "ms": 34.12691701669246, "pred": "local", "score": 1.2453, "variant": "preset"}
+{"confidence": 0.4654, "id": "r027", "ms": 51.30587497842498, "pred": "cheap", "probs": {"cheap": 0.4654, "frontier": 0.2815, "local": 0.2532}, "variant": "tier"}
+{"confidence": 0.401, "id": "r027", "ms": 35.34137501264922, "pred": "local", "score": 1.399, "variant": "preset"}
+{"confidence": 0.5302, "id": "r028", "ms": 52.5049589923583, "pred": "cheap", "probs": {"cheap": 0.5302, "frontier": 0.2365, "local": 0.2334}, "variant": "tier"}
+{"confidence": 0.4949, "id": "r028", "ms": 34.37458400730975, "pred": "local", "score": 1.2732, "variant": "preset"}
+{"confidence": 0.5602, "id": "r029", "ms": 52.94341698754579, "pred": "cheap", "probs": {"cheap": 0.5602, "frontier": 0.1881, "local": 0.2517}, "variant": "tier"}
+{"confidence": 0.4514, "id": "r029", "ms": 34.655541996471584, "pred": "cheap", "score": 1.5, "variant": "preset"}
+{"confidence": 0.579, "id": "r030", "ms": 52.213957998901606, "pred": "cheap", "probs": {"cheap": 0.579, "frontier": 0.1649, "local": 0.256}, "variant": "tier"}
+{"confidence": 0.4632, "id": "r030", "ms": 34.13466698839329, "pred": "local", "score": 1.5223, "variant": "preset"}
+{"confidence": 0.7755, "id": "r031", "ms": 51.203500013798475, "pred": "cheap", "probs": {"cheap": 0.7755, "frontier": 0.0972, "local": 0.1273}, "variant": "tier"}
+{"confidence": 0.4959, "id": "r031", "ms": 34.93379199062474, "pred": "local", "score": 1.3472, "variant": "preset"}
+{"confidence": 0.6422, "id": "r032", "ms": 52.480499987723306, "pred": "cheap", "probs": {"cheap": 0.6422, "frontier": 0.1377, "local": 0.22}, "variant": "tier"}
+{"confidence": 0.3551, "id": "r032", "ms": 35.08808300830424, "pred": "local", "score": 1.1563, "variant": "preset"}
+{"confidence": 0.5192, "id": "r033", "ms": 55.80104098771699, "pred": "cheap", "probs": {"cheap": 0.5192, "frontier": 0.2265, "local": 0.2542}, "variant": "tier"}
+{"confidence": 0.4906, "id": "r033", "ms": 35.16029202728532, "pred": "local", "score": 1.4238, "variant": "preset"}
+{"confidence": 0.5413, "id": "r034", "ms": 51.47629202110693, "pred": "cheap", "probs": {"cheap": 0.5413, "frontier": 0.1968, "local": 0.2619}, "variant": "tier"}
+{"confidence": 0.424, "id": "r034", "ms": 35.18741697189398, "pred": "local", "score": 1.23, "variant": "preset"}
+{"confidence": 0.5553, "id": "r035", "ms": 55.8104999945499, "pred": "cheap", "probs": {"cheap": 0.5553, "frontier": 0.1574, "local": 0.2873}, "variant": "tier"}
+{"confidence": 0.6046, "id": "r035", "ms": 34.56362499855459, "pred": "cheap", "score": 1.5616, "variant": "preset"}
+{"confidence": 0.6065, "id": "r036", "ms": 56.278959003975615, "pred": "cheap", "probs": {"cheap": 0.6065, "frontier": 0.1433, "local": 0.2502}, "variant": "tier"}
+{"confidence": 0.4161, "id": "r036", "ms": 36.27283399691805, "pred": "local", "score": 1.0549, "variant": "preset"}
+{"confidence": 0.5588, "id": "r037", "ms": 53.431207983521745, "pred": "cheap", "probs": {"cheap": 0.5588, "frontier": 0.2082, "local": 0.233}, "variant": "tier"}
+{"confidence": 0.4963, "id": "r037", "ms": 35.1161660219077, "pred": "cheap", "score": 1.5965, "variant": "preset"}
+{"confidence": 0.402, "id": "r038", "ms": 51.61708398372866, "pred": "cheap", "probs": {"cheap": 0.402, "frontier": 0.2868, "local": 0.3111}, "variant": "tier"}
+{"confidence": 0.4853, "id": "r038", "ms": 33.99858300690539, "pred": "local", "score": 1.5391, "variant": "preset"}
+{"confidence": 0.5702, "id": "r039", "ms": 55.67320898990147, "pred": "cheap", "probs": {"cheap": 0.5702, "frontier": 0.2065, "local": 0.2232}, "variant": "tier"}
+{"confidence": 0.461, "id": "r039", "ms": 35.749583010328934, "pred": "cheap", "score": 1.6676, "variant": "preset"}
+{"confidence": 0.5387, "id": "r040", "ms": 55.342957988614216, "pred": "cheap", "probs": {"cheap": 0.5387, "frontier": 0.2412, "local": 0.2201}, "variant": "tier"}
+{"confidence": 0.4092, "id": "r040", "ms": 33.93004200188443, "pred": "local", "score": 1.2953, "variant": "preset"}
+{"confidence": 0.5419, "id": "r041", "ms": 51.5561250213068, "pred": "cheap", "probs": {"cheap": 0.5419, "frontier": 0.211, "local": 0.2471}, "variant": "tier"}
+{"confidence": 0.4302, "id": "r041", "ms": 34.39545800210908, "pred": "cheap", "score": 1.4787, "variant": "preset"}
+{"confidence": 0.558, "id": "r042", "ms": 54.95604200405069, "pred": "cheap", "probs": {"cheap": 0.558, "frontier": 0.215, "local": 0.227}, "variant": "tier"}
+{"confidence": 0.4748, "id": "r042", "ms": 34.79716699803248, "pred": "local", "score": 1.4063, "variant": "preset"}
+{"confidence": 0.6343, "id": "r043", "ms": 51.96045900811441, "pred": "cheap", "probs": {"cheap": 0.6343, "frontier": 0.1817, "local": 0.184}, "variant": "tier"}
+{"confidence": 0.4129, "id": "r043", "ms": 35.44295800384134, "pred": "local", "score": 1.3887, "variant": "preset"}
+{"confidence": 0.5135, "id": "r044", "ms": 50.933374994201586, "pred": "cheap", "probs": {"cheap": 0.5135, "frontier": 0.1914, "local": 0.2952}, "variant": "tier"}
+{"confidence": 0.4792, "id": "r044", "ms": 34.3945829954464, "pred": "local", "score": 1.2826, "variant": "preset"}
+{"confidence": 0.5889, "id": "r045", "ms": 55.55658400407992, "pred": "cheap", "probs": {"cheap": 0.5889, "frontier": 0.2157, "local": 0.1954}, "variant": "tier"}
+{"confidence": 0.4741, "id": "r045", "ms": 35.0377079739701, "pred": "cheap", "score": 1.5331, "variant": "preset"}
+{"confidence": 0.6149, "id": "r046", "ms": 53.4438340109773, "pred": "cheap", "probs": {"cheap": 0.6149, "frontier": 0.1583, "local": 0.2267}, "variant": "tier"}
+{"confidence": 0.4602, "id": "r046", "ms": 35.522041987860575, "pred": "cheap", "score": 1.5061, "variant": "preset"}
+{"confidence": 0.5827, "id": "r047", "ms": 56.583208992378786, "pred": "cheap", "probs": {"cheap": 0.5827, "frontier": 0.1543, "local": 0.263}, "variant": "tier"}
+{"confidence": 0.6753, "id": "r047", "ms": 34.99841701705009, "pred": "cheap", "score": 1.8876, "variant": "preset"}
+{"confidence": 0.499, "id": "r048", "ms": 54.13274999591522, "pred": "cheap", "probs": {"cheap": 0.499, "frontier": 0.2042, "local": 0.2968}, "variant": "tier"}
+{"confidence": 0.4021, "id": "r048", "ms": 34.94083401164971, "pred": "cheap", "score": 1.3637, "variant": "preset"}
+{"confidence": 0.5536, "id": "r049", "ms": 53.673457994591445, "pred": "cheap", "probs": {"cheap": 0.5536, "frontier": 0.2073, "local": 0.2391}, "variant": "tier"}
+{"confidence": 0.4802, "id": "r049", "ms": 35.77987500466406, "pred": "cheap", "score": 1.6445, "variant": "preset"}
+{"confidence": 0.5096, "id": "r050", "ms": 52.28845798410475, "pred": "cheap", "probs": {"cheap": 0.5096, "frontier": 0.2187, "local": 0.2717}, "variant": "tier"}
+{"confidence": 0.4184, "id": "r050", "ms": 35.071583988610655, "pred": "local", "score": 1.228, "variant": "preset"}
+{"confidence": 0.5158, "id": "r051", "ms": 51.91554198972881, "pred": "cheap", "probs": {"cheap": 0.5158, "frontier": 0.2339, "local": 0.2503}, "variant": "tier"}
+{"confidence": 0.4023, "id": "r051", "ms": 34.95445800945163, "pred": "local", "score": 1.21, "variant": "preset"}
+{"confidence": 0.4177, "id": "r052", "ms": 51.98799999197945, "pred": "cheap", "probs": {"cheap": 0.4177, "frontier": 0.2628, "local": 0.3195}, "variant": "tier"}
+{"confidence": 0.4491, "id": "r052", "ms": 35.82312501384877, "pred": "cheap", "score": 1.5863, "variant": "preset"}
+{"confidence": 0.4205, "id": "r053", "ms": 57.45408299844712, "pred": "cheap", "probs": {"cheap": 0.4205, "frontier": 0.3619, "local": 0.2176}, "variant": "tier"}
+{"confidence": 0.4521, "id": "r053", "ms": 34.83591598342173, "pred": "cheap", "score": 1.5923, "variant": "preset"}
+{"confidence": 0.3919, "id": "r054", "ms": 51.84137498144992, "pred": "cheap", "probs": {"cheap": 0.3919, "frontier": 0.3802, "local": 0.2279}, "variant": "tier"}
+{"confidence": 0.4092, "id": "r054", "ms": 35.07100002025254, "pred": "local", "score": 1.6002, "variant": "preset"}
+{"confidence": 0.4232, "id": "r055", "ms": 53.12749999575317, "pred": "cheap", "probs": {"cheap": 0.4232, "frontier": 0.3279, "local": 0.2489}, "variant": "tier"}
+{"confidence": 0.484, "id": "r055", "ms": 34.60095799528062, "pred": "cheap", "score": 1.9192, "variant": "preset"}
+{"confidence": 0.5097, "id": "r056", "ms": 52.172333002090454, "pred": "cheap", "probs": {"cheap": 0.5097, "frontier": 0.2585, "local": 0.2318}, "variant": "tier"}
+{"confidence": 0.667, "id": "r056", "ms": 35.21279100095853, "pred": "cheap", "score": 1.9183, "variant": "preset"}
+{"confidence": 0.452, "id": "r057", "ms": 55.40629199822433, "pred": "cheap", "probs": {"cheap": 0.452, "frontier": 0.3207, "local": 0.2274}, "variant": "tier"}
+{"confidence": 0.4707, "id": "r057", "ms": 37.14183301781304, "pred": "cheap", "score": 1.7135, "variant": "preset"}
+{"confidence": 0.4201, "id": "r058", "ms": 51.47704199771397, "pred": "frontier", "probs": {"cheap": 0.3265, "frontier": 0.4201, "local": 0.2534}, "variant": "tier"}
+{"confidence": 0.3907, "id": "r058", "ms": 35.181332990759984, "pred": "cheap", "score": 1.6182, "variant": "preset"}
+{"confidence": 0.3913, "id": "r059", "ms": 54.94791598175652, "pred": "cheap", "probs": {"cheap": 0.3913, "frontier": 0.3491, "local": 0.2597}, "variant": "tier"}
+{"confidence": 0.4728, "id": "r059", "ms": 35.07479201653041, "pred": "cheap", "score": 1.5514, "variant": "preset"}
+{"confidence": 0.4113, "id": "r060", "ms": 54.72320900298655, "pred": "frontier", "probs": {"cheap": 0.2897, "frontier": 0.4113, "local": 0.2989}, "variant": "tier"}
+{"confidence": 0.4744, "id": "r060", "ms": 35.377708991291, "pred": "cheap", "score": 1.7541, "variant": "preset"}
+{"confidence": 0.6447, "id": "r061", "ms": 54.77791599696502, "pred": "cheap", "probs": {"cheap": 0.6447, "frontier": 0.2027, "local": 0.1526}, "variant": "tier"}
+{"confidence": 0.5137, "id": "r061", "ms": 35.68183400784619, "pred": "cheap", "score": 1.6886, "variant": "preset"}
+{"confidence": 0.4923, "id": "r062", "ms": 56.274458998814225, "pred": "cheap", "probs": {"cheap": 0.4923, "frontier": 0.1977, "local": 0.3101}, "variant": "tier"}
+{"confidence": 0.5852, "id": "r062", "ms": 37.21470799064264, "pred": "cheap", "score": 1.98, "variant": "preset"}
+{"confidence": 0.3911, "id": "r063", "ms": 52.233666996471584, "pred": "frontier", "probs": {"cheap": 0.3652, "frontier": 0.3911, "local": 0.2437}, "variant": "tier"}
+{"confidence": 0.4732, "id": "r063", "ms": 34.82570798951201, "pred": "cheap", "score": 1.9634, "variant": "preset"}
+{"confidence": 0.5659, "id": "r064", "ms": 55.82029098877683, "pred": "cheap", "probs": {"cheap": 0.5659, "frontier": 0.226, "local": 0.2082}, "variant": "tier"}
+{"confidence": 0.5903, "id": "r064", "ms": 35.29595900909044, "pred": "cheap", "score": 2.0163, "variant": "preset"}
+{"confidence": 0.4302, "id": "r065", "ms": 52.57145900395699, "pred": "cheap", "probs": {"cheap": 0.4302, "frontier": 0.2768, "local": 0.293}, "variant": "tier"}
+{"confidence": 0.3935, "id": "r065", "ms": 35.30183300608769, "pred": "local", "score": 1.5627, "variant": "preset"}
+{"confidence": 0.4271, "id": "r066", "ms": 54.68208299134858, "pred": "frontier", "probs": {"cheap": 0.3435, "frontier": 0.4271, "local": 0.2294}, "variant": "tier"}
+{"confidence": 0.5834, "id": "r066", "ms": 35.65725000225939, "pred": "cheap", "score": 2.1173, "variant": "preset"}
+{"confidence": 0.4927, "id": "r067", "ms": 56.07983301160857, "pred": "cheap", "probs": {"cheap": 0.4927, "frontier": 0.2816, "local": 0.2258}, "variant": "tier"}
+{"confidence": 0.5165, "id": "r067", "ms": 34.361875004833564, "pred": "cheap", "score": 1.8284, "variant": "preset"}
+{"confidence": 0.5554, "id": "r068", "ms": 54.46354200830683, "pred": "cheap", "probs": {"cheap": 0.5554, "frontier": 0.2101, "local": 0.2345}, "variant": "tier"}
+{"confidence": 0.5596, "id": "r068", "ms": 35.287250007968396, "pred": "cheap", "score": 1.9122, "variant": "preset"}
+{"confidence": 0.4754, "id": "r069", "ms": 55.42595899896696, "pred": "cheap", "probs": {"cheap": 0.4754, "frontier": 0.3362, "local": 0.1884}, "variant": "tier"}
+{"confidence": 0.4183, "id": "r069", "ms": 35.04245899966918, "pred": "cheap", "score": 1.6831, "variant": "preset"}
+{"confidence": 0.4554, "id": "r070", "ms": 52.623666008003056, "pred": "cheap", "probs": {"cheap": 0.4554, "frontier": 0.2314, "local": 0.3132}, "variant": "tier"}
+{"confidence": 0.4257, "id": "r070", "ms": 37.21487501752563, "pred": "cheap", "score": 1.8369, "variant": "preset"}
+{"confidence": 0.4256, "id": "r071", "ms": 54.829792003147304, "pred": "cheap", "probs": {"cheap": 0.4256, "frontier": 0.3085, "local": 0.2658}, "variant": "tier"}
+{"confidence": 0.5692, "id": "r071", "ms": 36.17037500953302, "pred": "cheap", "score": 1.8987, "variant": "preset"}
+{"confidence": 0.3779, "id": "r072", "ms": 51.90804100129753, "pred": "frontier", "probs": {"cheap": 0.3728, "frontier": 0.3779, "local": 0.2493}, "variant": "tier"}
+{"confidence": 0.4177, "id": "r072", "ms": 35.129541996866465, "pred": "local", "score": 1.3211, "variant": "preset"}
+{"confidence": 0.5073, "id": "r073", "ms": 53.173041989794, "pred": "cheap", "probs": {"cheap": 0.5073, "frontier": 0.2919, "local": 0.2008}, "variant": "tier"}
+{"confidence": 0.5862, "id": "r073", "ms": 36.50345801725052, "pred": "cheap", "score": 1.8037, "variant": "preset"}
+{"confidence": 0.4455, "id": "r074", "ms": 55.47958301031031, "pred": "frontier", "probs": {"cheap": 0.3236, "frontier": 0.4455, "local": 0.2309}, "variant": "tier"}
+{"confidence": 0.6216, "id": "r074", "ms": 35.680333006894216, "pred": "cheap", "score": 2.0067, "variant": "preset"}
+{"confidence": 0.5015, "id": "r075", "ms": 54.36524999095127, "pred": "cheap", "probs": {"cheap": 0.5015, "frontier": 0.247, "local": 0.2514}, "variant": "tier"}
+{"confidence": 0.5521, "id": "r075", "ms": 34.42358301253989, "pred": "local", "score": 1.3135, "variant": "preset"}
+{"confidence": 0.4304, "id": "r076", "ms": 50.35179198603146, "pred": "cheap", "probs": {"cheap": 0.4304, "frontier": 0.3002, "local": 0.2693}, "variant": "tier"}
+{"confidence": 0.4216, "id": "r076", "ms": 33.68620801484212, "pred": "local", "score": 1.4163, "variant": "preset"}
+{"confidence": 0.3939, "id": "r077", "ms": 50.82750000292435, "pred": "cheap", "probs": {"cheap": 0.3939, "frontier": 0.2744, "local": 0.3317}, "variant": "tier"}
+{"confidence": 0.4934, "id": "r077", "ms": 34.83399999095127, "pred": "local", "score": 1.5162, "variant": "preset"}
+{"confidence": 0.5073, "id": "r078", "ms": 51.7258329782635, "pred": "cheap", "probs": {"cheap": 0.5073, "frontier": 0.236, "local": 0.2567}, "variant": "tier"}
+{"confidence": 0.5865, "id": "r078", "ms": 35.3589589940384, "pred": "local", "score": 1.1478, "variant": "preset"}
+{"confidence": 0.5708, "id": "r079", "ms": 52.289709012256935, "pred": "cheap", "probs": {"cheap": 0.5708, "frontier": 0.1541, "local": 0.2751}, "variant": "tier"}
+{"confidence": 0.5373, "id": "r079", "ms": 35.39620799710974, "pred": "local", "score": 1.1742, "variant": "preset"}
+{"confidence": 0.4524, "id": "r080", "ms": 51.656208001077175, "pred": "cheap", "probs": {"cheap": 0.4524, "frontier": 0.3303, "local": 0.2173}, "variant": "tier"}
+{"confidence": 0.4653, "id": "r080", "ms": 34.21300000627525, "pred": "local", "score": 1.3506, "variant": "preset"}
+{"confidence": 0.483, "id": "r081", "ms": 53.21554097463377, "pred": "cheap", "probs": {"cheap": 0.483, "frontier": 0.2909, "local": 0.226}, "variant": "tier"}
+{"confidence": 0.553, "id": "r081", "ms": 34.57366698421538, "pred": "local", "score": 1.4198, "variant": "preset"}
+{"confidence": 0.6789, "id": "r082", "ms": 54.169750015717, "pred": "cheap", "probs": {"cheap": 0.6789, "frontier": 0.1394, "local": 0.1818}, "variant": "tier"}
+{"confidence": 0.6708, "id": "r082", "ms": 36.169958009850234, "pred": "local", "score": 1.0571, "variant": "preset"}
+{"confidence": 0.3691, "id": "r083", "ms": 56.37516701244749, "pred": "local", "probs": {"cheap": 0.3003, "frontier": 0.3306, "local": 0.3691}, "variant": "tier"}
+{"confidence": 0.4389, "id": "r083", "ms": 37.35720898839645, "pred": "local", "score": 1.439, "variant": "preset"}
+{"confidence": 0.3647, "id": "r084", "ms": 58.53954199119471, "pred": "cheap", "probs": {"cheap": 0.3647, "frontier": 0.3464, "local": 0.2888}, "variant": "tier"}
+{"confidence": 0.4109, "id": "r084", "ms": 38.652417017146945, "pred": "local", "score": 1.4219, "variant": "preset"}
+{"confidence": 0.4224, "id": "r085", "ms": 53.46270799054764, "pred": "cheap", "probs": {"cheap": 0.4224, "frontier": 0.1949, "local": 0.3826}, "variant": "tier"}
+{"confidence": 0.4717, "id": "r085", "ms": 34.32733300724067, "pred": "local", "score": 0.6365, "variant": "preset"}
+{"confidence": 0.3476, "id": "r086", "ms": 57.76829199749045, "pred": "local", "probs": {"cheap": 0.3098, "frontier": 0.3426, "local": 0.3476}, "variant": "tier"}
+{"confidence": 0.6392, "id": "r086", "ms": 36.691582994535565, "pred": "cheap", "score": 1.7114, "variant": "preset"}
+{"confidence": 0.4597, "id": "r087", "ms": 54.3100829818286, "pred": "local", "probs": {"cheap": 0.3438, "frontier": 0.1965, "local": 0.4597}, "variant": "tier"}
+{"confidence": 0.5412, "id": "r087", "ms": 38.48370900959708, "pred": "local", "score": 1.1809, "variant": "preset"}
+{"confidence": 0.4498, "id": "r088", "ms": 56.70008301967755, "pred": "local", "probs": {"cheap": 0.3624, "frontier": 0.1879, "local": 0.4498}, "variant": "tier"}
+{"confidence": 0.4055, "id": "r088", "ms": 34.82866700505838, "pred": "cheap", "score": 1.5425, "variant": "preset"}
+{"confidence": 0.4156, "id": "r089", "ms": 55.169541999930516, "pred": "cheap", "probs": {"cheap": 0.4156, "frontier": 0.3843, "local": 0.2}, "variant": "tier"}
+{"confidence": 0.3896, "id": "r089", "ms": 35.84249998675659, "pred": "cheap", "score": 1.6436, "variant": "preset"}
+{"confidence": 0.3769, "id": "r090", "ms": 55.673458002274856, "pred": "local", "probs": {"cheap": 0.3638, "frontier": 0.2593, "local": 0.3769}, "variant": "tier"}
+{"confidence": 0.5208, "id": "r090", "ms": 35.50337499473244, "pred": "local", "score": 1.4663, "variant": "preset"}
+{"confidence": 0.6908, "id": "r091", "ms": 58.25758297578432, "pred": "cheap", "probs": {"cheap": 0.6908, "frontier": 0.13, "local": 0.1791}, "variant": "tier"}
+{"confidence": 0.4438, "id": "r091", "ms": 39.429625001503155, "pred": "local", "score": 1.4611, "variant": "preset"}
+{"confidence": 0.4305, "id": "r092", "ms": 57.66574997687712, "pred": "cheap", "probs": {"cheap": 0.4305, "frontier": 0.2996, "local": 0.2699}, "variant": "tier"}
+{"confidence": 0.3843, "id": "r092", "ms": 36.951416986994445, "pred": "local", "score": 1.2837, "variant": "preset"}
+{"confidence": 0.5117, "id": "r093", "ms": 57.88220799877308, "pred": "cheap", "probs": {"cheap": 0.5117, "frontier": 0.221, "local": 0.2673}, "variant": "tier"}
+{"confidence": 0.5779, "id": "r093", "ms": 39.50341700692661, "pred": "cheap", "score": 1.7871, "variant": "preset"}
+{"confidence": 0.5911, "id": "r094", "ms": 54.57883302005939, "pred": "cheap", "probs": {"cheap": 0.5911, "frontier": 0.1288, "local": 0.2801}, "variant": "tier"}
+{"confidence": 0.6011, "id": "r094", "ms": 33.86937500908971, "pred": "local", "score": 1.0435, "variant": "preset"}

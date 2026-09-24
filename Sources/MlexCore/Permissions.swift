@@ -335,6 +335,15 @@ public enum WorkspaceTrust {
 public enum SafetyClassifier {
     public enum Verdict { case safe(String), review(String), dangerous(String) }
 
+    public static let safeMeans = "builds, tests, formatting, git commits on the current branch, creating or editing files inside the project, package installs into the project"
+    public static let reviewMeans = "network calls, installs outside the project, anything touching files outside the project, unfamiliar tools, long-running servers"
+    public static let dangerousMeans = "deleting outside the project, privilege escalation, sending files or secrets anywhere, disabling security"
+    public static let instructions = """
+    You judge whether a shell command is safe for an AI coding agent to run automatically \
+    inside a software project directory. safe: \(safeMeans). review: \(reviewMeans). \
+    dangerous: \(dangerousMeans). When unsure, answer review.
+    """
+
     public static func classify(command: String, cwd: String) async -> Verdict {
         do {
             let schema = try GenerationSchema(root: DynamicGenerationSchema(name: "Safety", properties: [
@@ -342,15 +351,7 @@ public enum SafetyClassifier {
                       schema: SchemaBuilder.choice("Verdict", ["safe", "review", "dangerous"])),
                 .init(name: "reason", description: "One short clause", schema: SchemaBuilder.string),
             ]), dependencies: [])
-            let session = LanguageModelSession(model: .default, instructions: """
-            You judge whether a shell command is safe for an AI coding agent to run automatically \
-            inside a software project directory. safe: builds, tests, formatting, git commits on the \
-            current branch, creating or editing files inside the project, package installs into the \
-            project. review: network calls, installs outside the project, anything touching files \
-            outside the project, unfamiliar tools, long-running servers. dangerous: deleting outside \
-            the project, privilege escalation, sending files or secrets anywhere, disabling security. \
-            When unsure, answer review.
-            """)
+            let session = LanguageModelSession(model: .default, instructions: instructions)
             let r = try await session.respond(to: "Working directory: \(cwd)\nCommand: \(command.prefix(600))", schema: schema, options: GenerationOptions(maximumResponseTokens: 60))
             let v = (try? r.content.value(String.self, forProperty: "verdict")) ?? "review"
             let why = (try? r.content.value(String.self, forProperty: "reason")) ?? ""
