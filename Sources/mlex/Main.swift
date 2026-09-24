@@ -568,7 +568,12 @@ enum Printer {
         case .textDelta(let t):
             FileHandle.standardOutput.write(Data(t.utf8)); lineStart = t.hasSuffix("\n")
         case .toolCall(let name, let args):
-            FileHandle.standardOutput.write(Data("\(lineStart ? "" : "\n")  ⚙ \(name): \(args.prefix(200))\n".utf8)); lineStart = true
+            var shown = String(args.prefix(200))
+            if name == "edit_file" || name == "write_file", let d = try? JSONSerialization.jsonObject(with: Data(args.utf8)) as? [String: String], let path = d["path"] {
+                let oldN = d["old"]?.split(separator: "\n").count, newN = (d["new"] ?? d["content"])?.split(separator: "\n").count ?? 0
+                shown = name == "edit_file" ? "\(path) (-\(oldN ?? 0) +\(newN) lines)" : "\(path) (\(newN) lines)"
+            }
+            FileHandle.standardOutput.write(Data("\(lineStart ? "" : "\n")  ⚙ \(name): \(shown)\n".utf8)); lineStart = true
         case .toolResult(_, let out):
             let firstLines = out.split(separator: "\n", omittingEmptySubsequences: false).prefix(6).joined(separator: "\n    ")
             FileHandle.standardOutput.write(Data("    \(firstLines)\(out.count > 400 ? "\n    …" : "")\n".utf8)); lineStart = true

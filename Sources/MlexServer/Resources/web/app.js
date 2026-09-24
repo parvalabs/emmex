@@ -80,6 +80,32 @@ function md(src) {
 
 /* ---------- timeline ---------- */
 const toolIcon = (n) => n === 'bash' ? '›_' : n === 'read_file' ? '▤' : (n === 'write_file' || n === 'edit_file') ? '✎' : n.includes('__') ? '⁂' : '⚙';
+
+/* Line diff (LCS) for edit_file: returns [[' '|'-'|'+', line], ...] */
+function lineDiff(a, b) {
+  const A = a.split('\n'), B = b.split('\n'), n = A.length, m = B.length;
+  const L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const out = []; let i = 0, j = 0;
+  while (i < n && j < m) { if (A[i] === B[j]) { out.push([' ', A[i]]); i++; j++; } else if (L[i + 1][j] >= L[i][j + 1]) out.push(['-', A[i++]]); else out.push(['+', B[j++]]); }
+  while (i < n) out.push(['-', A[i++]]); while (j < m) out.push(['+', B[j++]]);
+  return out;
+}
+function parseArgs(it) { try { return JSON.parse(it.text); } catch { return null; } }
+function renderEdit(it) {
+  const a = parseArgs(it); if (!a || !a.path) return null;
+  const e = el('div', 'edit');
+  const head = el('div', 'head'); head.append(el('span', 'ico', '✎'), el('span', 'name', it.title === 'write_file' ? 'write' : 'edit'), el('span', 'path', a.path));
+  const rows = it.title === 'write_file' ? (a.content || '').split('\n').map(l => ['+', l]) : lineDiff(a.old || '', a.new || '');
+  const adds = rows.filter(r => r[0] === '+').length, dels = rows.filter(r => r[0] === '-').length;
+  head.append(el('span', 'stat', `+${adds} −${dels}`)); e.append(head);
+  const pre = el('pre', 'diff');
+  const shown = rows.length > 60 ? rows.slice(0, 60) : rows;
+  for (const [k, l] of shown) { const ln = el('div', 'l ' + (k === '+' ? 'add' : k === '-' ? 'del' : 'ctx'), (k === ' ' ? '  ' : k + ' ') + l); pre.append(ln); }
+  if (rows.length > 60) pre.append(el('div', 'l ctx', `… ${rows.length - 60} more lines`));
+  e.append(pre); head.onclick = () => e.classList.toggle('open'); e.classList.toggle('open', rows.length <= 12);
+  return e;
+}
 function renderItem(it) {
   let e;
   switch (it.kind) {
@@ -91,6 +117,7 @@ function renderItem(it) {
       break;
     case 'assistant': e = el('div', 'assistant'); e.innerHTML = md(it.text); break;
     case 'toolCall':
+      if (it.title === 'edit_file' || it.title === 'write_file') { const d = renderEdit(it); if (d) { e = d; break; } }
       e = el('div', 'tool'); e.append(el('span', 'ico', toolIcon(it.title)), el('span', 'name', it.title), el('span', 'args', it.text));
       e.onclick = () => e.classList.toggle('open'); break;
     case 'toolResult': {
@@ -111,10 +138,32 @@ function renderTimeline() {
     [[S.tools.length, 'tools'], [S.skills.length, 'skills'], [S.mcp.length, 'MCP servers'], [S.memory.length, 'memories']].forEach(([n, l]) => st.append(el('span', 'stat', `${n} ${l}`)));
     em.append(st); t.append(em);
   }
-  for (const it of S.timeline) { const e = renderItem(it); items.set(it.id, e); t.append(e); if (it.kind === 'user' && it.userTurn) { const b = routeBadge(it.userTurn); if (b) t.append(b); } }
+  let group = null;
+  for (const it of S.timeline) {
+    const e = renderItem(it); items.set(it.id, e);
+    if (isToolKind(it.kind)) { if (!group) { group = newGroup(); t.append(group); } addToGroup(group, e, it); }
+    else { if (group) { finishGroup(group); group = null; } t.append(e); if (it.kind === 'user' && it.userTurn) { const b = routeBadge(it.userTurn); if (b) t.append(b); } }
+  }
+  if (group) finishGroup(group, S.busy);
   if (S.busy) { const th = el('div', 'thinking'); th.append(el('span', 'dot'), el('span', '', 'Thinking…')); th.id = 'thinking'; t.append(th); }
   scrollBottom();
 }
+/* Consecutive tool calls/results collapse into a group with a count once the model resumes talking. */
+const isToolKind = (k) => k === 'toolCall' || k === 'toolResult' || k === 'audit';
+function newGroup() { const g = el('div', 'toolgroup'); g.append(el('div', 'ghead'), el('div', 'gbody')); g.dataset.calls = '0'; g.dataset.names = ''; g.querySelector('.ghead').onclick = () => g.classList.toggle('open'); return g; }
+function addToGroup(g, e, it) {
+  g.querySelector('.gbody').append(e);
+  if (it.kind === 'toolCall') { g.dataset.calls = String(+g.dataset.calls + 1); g.dataset.names += (g.dataset.names ? ',' : '') + it.title; }
+  updateGroupHead(g, true);
+}
+function updateGroupHead(g, live) {
+  const n = +g.dataset.calls; const counts = {}; g.dataset.names.split(',').filter(Boolean).forEach(x => counts[x] = (counts[x] || 0) + 1);
+  const summary = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => v > 1 ? `${k} ×${v}` : k).join(', ');
+  const h = g.querySelector('.ghead'); h.innerHTML = '';
+  h.append(el('span', 'chev', '▶'), el('span', 'n', `${n} tool call${n === 1 ? '' : 's'}`), el('span', 'sum', summary));
+  g.classList.toggle('open', live || n <= 2);
+}
+function finishGroup(g, stillRunning = false) { updateGroupHead(g, stillRunning); }
 function scrollBottom() { const s = $('#scroll'); s.scrollTop = s.scrollHeight; }
 
 function routeBadge(turn) {
@@ -329,7 +378,17 @@ function applyState(s) {
 const es = new EventSource('/events');
 es.addEventListener('state', (e) => applyState(JSON.parse(e.data)));
 es.addEventListener('append', (e) => { const it = JSON.parse(e.data); if (!S) return; S.timeline.push(it); const t = $('#timeline'); t.querySelector('.empty')?.remove();
-  const th = $('#thinking'); const node = renderItem(it); items.set(it.id, node); th ? t.insertBefore(node, th) : t.append(node); scrollBottom(); });
+  const th = $('#thinking'); const node = renderItem(it); items.set(it.id, node);
+  const last = th ? th.previousElementSibling : t.lastElementChild;
+  if (isToolKind(it.kind)) {
+    let g = last && last.classList.contains('toolgroup') ? last : null;
+    if (!g) { g = newGroup(); th ? t.insertBefore(g, th) : t.append(g); }
+    addToGroup(g, node, it);
+  } else {
+    if (last && last.classList.contains('toolgroup')) finishGroup(last);
+    th ? t.insertBefore(node, th) : t.append(node);
+  }
+  scrollBottom(); });
 es.addEventListener('delta', (e) => { const d = JSON.parse(e.data); const it = S && S.timeline.find(x => x.id === d.id); if (!it) return; it.text += d.text; const node = items.get(d.id); if (node) node.innerHTML = md(it.text); scrollBottom(); });
 es.addEventListener('pull', (e) => { const d = JSON.parse(e.data); if (S) { S.pulls[d.id] = d.fraction; renderPulls(); } });
 fetch('/state').then(r => r.json()).then(applyState);

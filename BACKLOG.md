@@ -62,6 +62,8 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Done
 
+- Collapsed tool-call groups with counts and a line-diff view for edits in the web UI, after two
+  dogfood sessions made 15-step timelines hard to read (`6321928`).
 - Router escalation floor after a dogfood session sent a concurrency fix to Haiku (Opus review:
   under-routed): judgment cues raise to frontier, multi-step edits and code questions to cheap;
   `mlex route -- "<prompt>"` shows decisions (`50ff930`).

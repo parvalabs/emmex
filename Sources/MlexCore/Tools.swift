@@ -121,6 +121,13 @@ public struct ReadFileTool: Tool {
     }
 }
 
+extension Tool {
+    /// Structured arguments for UIs (diff views); falls back to a description on failure.
+    static func json(_ d: [String: String]) -> String {
+        (try? JSONSerialization.data(withJSONObject: d, options: [.sortedKeys])).flatMap { String(data: $0, encoding: .utf8) } ?? d.description
+    }
+}
+
 public struct WriteFileTool: Tool {
     public let name = "write_file"
     public let description = "Create or overwrite a text file with the given content. Path is relative to the working directory."
@@ -134,7 +141,7 @@ public struct WriteFileTool: Tool {
     public func call(arguments: GeneratedContent) async throws -> String {
         let path = try arguments.value(String.self, forProperty: "path")
         let content = try arguments.value(String.self, forProperty: "content")
-        ctx.report(.toolCall(name: name, arguments: "\(path) (\(content.count) chars)"))
+        ctx.report(.toolCall(name: name, arguments: Self.json(["path": path, "content": content])))
         let url = URL(fileURLWithPath: ctx.cwd).appendingPathComponent(path)
         if let refusal = await ctx.gate(.init(id: UUID().uuidString, tool: name, summary: "write \(path)", command: nil, paths: [url.path])) {
             ctx.report(.toolResult(name: name, output: refusal)); return refusal
@@ -166,7 +173,7 @@ public struct EditFileTool: Tool {
         let path = try arguments.value(String.self, forProperty: "path")
         let old = try arguments.value(String.self, forProperty: "old")
         let new = try arguments.value(String.self, forProperty: "new")
-        ctx.report(.toolCall(name: name, arguments: "\(path): \(old.prefix(40))… -> \(new.prefix(40))…"))
+        ctx.report(.toolCall(name: name, arguments: Self.json(["path": path, "old": old, "new": new])))
         let url = URL(fileURLWithPath: ctx.cwd).appendingPathComponent(path)
         if let refusal = await ctx.gate(.init(id: UUID().uuidString, tool: name, summary: "edit \(path)", command: nil, paths: [url.path])) {
             ctx.report(.toolResult(name: name, output: refusal)); return refusal

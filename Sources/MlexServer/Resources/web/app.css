@@ -173,3 +173,22 @@ input.text:focus { border-color: var(--accent); }
 .routebadge { align-self: flex-end; font-size: 10.5px; color: var(--faint); margin-top: -12px; cursor: default; }
 .routebadge .m { color: var(--muted); font-weight: 500; }
 .routebadge .rv.appropriate { color: var(--ok); } .routebadge .rv.over-routed, .routebadge .rv.under-routed { color: var(--warn); }
+
+/* ---------- tool groups & diffs ---------- */
+.toolgroup { display: flex; flex-direction: column; gap: 8px; }
+.toolgroup .ghead { display: none; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); cursor: pointer; padding: 5px 10px; border-radius: 8px; background: color-mix(in srgb, var(--fill) 70%, transparent); }
+.toolgroup .ghead .chev { font-size: 9px; transition: transform .12s; } .toolgroup.open .ghead .chev { transform: rotate(90deg); }
+.toolgroup .ghead .n { font-weight: 600; } .toolgroup .ghead .sum { color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toolgroup:not(.open) .ghead { display: flex; } .toolgroup:not(.open) .gbody { display: none; }
+.toolgroup.open .ghead { display: flex; }
+.toolgroup .gbody { display: flex; flex-direction: column; gap: 8px; }
+.edit { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.edit .head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 11.5px; color: var(--muted); background: color-mix(in srgb, var(--fill) 70%, transparent); cursor: pointer; }
+.edit .head .name { font-weight: 600; } .edit .head .path { font-family: var(--mono); font-size: 11.5px; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edit .head .stat { font-variant-numeric: tabular-nums; }
+.edit .diff { display: none; margin: 0; padding: 6px 0; font: 11.5px/1.5 var(--mono); max-height: 360px; overflow: auto; background: var(--code); }
+.edit.open .diff { display: block; }
+.edit .l { padding: 0 10px; white-space: pre-wrap; word-break: break-all; }
+.edit .l.add { background: rgba(58,157,93,.14); color: color-mix(in srgb, var(--ok) 70%, var(--text)); }
+.edit .l.del { background: rgba(192,57,43,.12); color: color-mix(in srgb, var(--err) 70%, var(--text)); }
+.edit .l.ctx { color: var(--faint); }
