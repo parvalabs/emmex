@@ -249,6 +249,15 @@ async function refreshGitDiff() {
   } catch {} finally { gitDiffInFlight = false; }
 }
 
+/* Overlay scrollbars: mark whichever box is scrolling so its thumb shows, then fade it out. */
+(() => {
+  const timers = new WeakMap();
+  document.addEventListener('scroll', (e) => {
+    const t = e.target === document ? document.documentElement : e.target; if (!(t instanceof Element)) return;
+    t.classList.add('scrolling'); clearTimeout(timers.get(t)); timers.set(t, setTimeout(() => t.classList.remove('scrolling'), 800));
+  }, true);
+})();
+
 /* Panel resize: drag the left edge; the width is remembered. */
 (() => {
   const panel = $('#panel'); const grip = $('#panel-grip');
