@@ -52,6 +52,12 @@ See `docs/FEASIBILITY.md` for the spike results that shaped the design.
   or `full`. Approvals appear inline with Deny / Always allow / Allow; "always" saves a per-
   workspace prefix rule in `.mlex/permissions.json`. `mlex policy -- "<command>"` shows the
   decision without running it; `mlex trust` marks a workspace's own scripts as runnable.
+- **Sandbox**: every shell command runs under a Seatbelt profile (`sandbox-exec`): writes only
+  inside the workspace, temp, and package-manager caches; `.git/hooks` and `.mlex` never
+  writable; `~/.ssh`, `~/.aws`, `~/.gnupg`, Keychains, and shell history never readable;
+  network only for commands that need it (git, npm, pip, cargo, curl, brew…) or in `full`.
+  SwiftPM commands get `--disable-sandbox` because macOS refuses nested sandboxes. Disable with
+  `"sandbox": false` in settings.
 - **Effort** per message: `off | low | medium | high` (Claude effort, MLX thinking on/off).
 - **Memory-aware model loading**: one MLX model resident at a time, with headroom warnings.
 

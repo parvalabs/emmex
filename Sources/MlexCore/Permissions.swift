@@ -29,6 +29,18 @@ public struct ToolRequest: Sendable, Identifiable {
 
 public enum Decision: Sendable, Equatable { case allow(String), deny(String), ask(String) }   // payload: reason/layer
 
+/// Commands that legitimately need the network; everything else runs with network denied.
+public enum NetworkPolicy {
+    static let heads: Set<String> = ["git", "npm", "npx", "pnpm", "yarn", "bun", "pip", "pip3", "uv", "uvx", "cargo", "go", "brew", "gem", "bundle", "swift", "xcodebuild", "curl", "wget", "gh", "docker", "kubectl", "aws", "mise", "poetry", "composer", "dotnet", "mvn", "gradle", "hf", "ollama"]
+    public static func needsNetwork(_ cmd: String) -> Bool {
+        PolicyEngine.split(cmd).contains { part in
+            let words = PolicyEngine.stripWrappers(part.split(separator: " ").map(String.init))
+            guard let h = words.first else { return false }
+            return heads.contains(PolicyEngine.basename(h))
+        }
+    }
+}
+
 /// Deterministic rules, provenance, and the on-device classifier, in that order.
 public actor PolicyEngine {
     public let workspace: URL
@@ -187,7 +199,7 @@ public actor PolicyEngine {
     static let neverPrefixApprove: Set<String> = ["find", "xargs", "sh", "bash", "zsh", "env", "eval", "sudo", "watch", "flock", "time", "timeout", "nohup", "nice"]
 
     static let readOnlyHeads: Set<String> = ["ls", "cat", "head", "tail", "wc", "grep", "rg", "find", "pwd", "echo", "which", "file", "stat", "du", "df", "date", "whoami", "env", "printenv", "tree", "diff", "sort", "uniq", "cut", "awk", "sed", "jq", "less", "more", "basename", "dirname", "realpath", "type", "test", "true", "xargs", "column", "nl", "od", "strings", "md5", "shasum", "sw_vers", "uname", "sysctl"]
-    static let readOnlyGit: Set<String> = ["status", "log", "diff", "show", "branch", "remote", "rev-parse", "ls-files", "blame", "describe", "tag", "stash list", "worktree list", "config --get"]
+    static let readOnlyGit: Set<String> = ["status", "log", "diff", "show", "branch", "remote", "rev-parse", "ls-files", "ls-remote", "fetch", "blame", "describe", "tag", "stash list", "worktree list", "config --get"]
 
     /// Every simple command in a pipeline / list must be read-only, and nothing may redirect to a file.
     static func isReadOnly(_ cmd: String) -> Bool {

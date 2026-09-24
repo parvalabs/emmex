@@ -17,10 +17,13 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Safety
 
-- **Sandboxing** (2026-09-23): commands that pass the policy run unsandboxed. Evaluate Apple
-  sandbox profiles (`sandbox-exec`) or the sandbox runtime Pi's example extension uses, with
-  denyRead for `~/.ssh`, `~/.aws`, `~/.gnupg`, allowWrite for the workspace and tmp, and a
-  network allowlist. Required before `full` is used outside worktrees.
+- **Network domain allowlist** (2026-09-23): the sandbox grants network per command (all or
+  nothing). A local proxy with a domain allowlist, as Anthropic's sandbox runtime does, would
+  let `npm install` reach the registry without reaching anything else.
+- **Temp breadth** (2026-09-23): the sandbox leaves all of `/private/tmp` and `/var/folders`
+  writable; a per-session temp dir would be tighter.
+- **Sandbox for MCP servers** (2026-09-23): stdio MCP servers run unsandboxed; wrap their
+  process the same way, with a per-server network setting.
 - **Shell AST parsing** (2026-09-23): text-based splitting misses `git -C .. push`-style
   evasions; OpenCode uses tree-sitter-bash. Consider a real parser or, cheaper, more opaque
   patterns that force asking.
@@ -66,3 +69,4 @@ that closed them rather than deleting them. Dates are when the item was added.
 - Router with `auto` model; memory with embeddings, scopes, decay, expiry, supersede,
   consolidation, auto-consolidation (`c719ddc`, `d1b9ccd`, `c7d55f2`, `83889a5`).
 - OpenAI-compatible providers (`0acbcf0`). Permissions and modes (`9edc633`).
+- Seatbelt sandbox for shell commands with per-command network grants (`fc8aff1`).

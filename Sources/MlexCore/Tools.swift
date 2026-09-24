@@ -38,8 +38,16 @@ public struct BashTool: Tool {
             ctx.report(.toolResult(name: name, output: refusal)); return refusal
         }
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        p.arguments = ["-lc", command]
+        // The sandbox applies at every level; `full` only stops asking and grants network.
+        if let policy = ctx.policy, Settings.load().sandbox, Sandbox.isAvailable {
+            let full = await policy.level == .full
+            let sb = Sandbox(workspace: await policy.workspace, cwd: URL(fileURLWithPath: ctx.cwd), network: full || NetworkPolicy.needsNetwork(command))
+            let (exe, args) = sb.arguments(for: command)
+            p.executableURL = URL(fileURLWithPath: exe); p.arguments = args
+        } else {
+            p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            p.arguments = ["-lc", command]
+        }
         p.currentDirectoryURL = URL(fileURLWithPath: ctx.cwd)
         let pipe = Pipe(); p.standardOutput = pipe; p.standardError = pipe
         try p.run()
