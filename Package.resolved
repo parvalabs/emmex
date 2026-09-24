@@ -1,5 +1,5 @@
 {
-  "originHash" : "d84c20756fca54f9e592aa2e44ecc26dc6b5901492c6f66720474f539b3eaf3c",
+  "originHash" : "847fe984c085acebec79bdfb5271bdd761802b684342439d33f45dca54e3975e",
   "pins" : [
     {
       "identity" : "claudeforfoundationmodels",
@@ -35,15 +35,6 @@
       "state" : {
         "revision" : "0bb916c67f4b9e5c682cbe02a42c701c93ab5021",
         "version" : "0.31.6"
-      }
-    },
-    {
-      "identity" : "mlx-swift-lm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ml-explore/mlx-swift-lm.git",
-      "state" : {
-        "branch" : "main",
-        "revision" : "ee673d6a71d76e67b532dc7eaf91d92edc3bb8bb"
       }
     },
     {

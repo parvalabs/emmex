@@ -12,7 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/anthropics/ClaudeForFoundationModels.git", from: "0.2.1"),
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", branch: "main"),
+        .package(path: "Vendor/mlx-swift-lm"),   // upstream main @ ee673d6a plus our KV-cache reuse patch (see Vendor/mlx-swift-lm/MLEX-PATCHES.md)
         .package(url: "https://github.com/huggingface/swift-huggingface", from: "0.9.0"),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),

@@ -157,3 +157,10 @@ Private Cloud Compute needs Apple's managed entitlement and a real signing ident
 
 Tools are defined with `DynamicGenerationSchema` rather than `@Generable`, so they can be
 declared at runtime and the package builds without the macro plugin.
+
+## Vendored dependencies
+
+`Vendor/mlx-swift-lm` is a copy of [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm)
+(`main` at `ee673d6a`) with one patch: the FoundationModels adapter keeps the KV cache between
+requests, so a long session only prefills its new tokens on each turn. The patch is documented in
+`Vendor/mlx-swift-lm/MLEX-PATCHES.md`; `MLEX_MLX_PROMPT_CACHE=0` disables it.
