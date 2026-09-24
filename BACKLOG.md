@@ -17,6 +17,11 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Safety
 
+- **Secrets in tool output** (2026-09-24): the secret scanner checks what the user sends, not
+  what tools return. `cat .env` or a curl response with a token still reaches the model and the
+  transcript. Run `SecretScanner.ruleFindings` on tool results and redact before they are
+  returned to the model, saved, or shown in full.
+
 - **Smart mode runs publishing and global commands unasked** (2026-09-24, found by `evals/`):
   the 3B judge calls these safe in the gray zone, so they run without a prompt: `npm publish`
   (labelled dangerous), `git push origin main`, `pip install --user`, `pip install -r` and

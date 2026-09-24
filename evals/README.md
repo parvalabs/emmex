@@ -5,7 +5,11 @@ Offline accuracy and latency checks for the classifiers mlex runs on every turn:
 
 - `data/routing.jsonl`: 94 requests, 12 of them short replies that depend on the previous turn.
 - `data/commands.jsonl`: 60 shell commands, from builds and tests to exfiltration.
-- Labels come from Opus 5.5, given the same tier and safety definitions the classifiers get
+- `data/secrets.jsonl` and `data/secrets-holdout.jsonl`: 56 and 24 messages for the secret
+  scanner, hand-labelled. `{{name}}` placeholders expand to synthetic tokens at runtime
+  (`EvalHarness.fixture`), so the repo holds nothing that looks like a live credential.
+  Run with `mlex eval secrets` (`--dir` for the held-out copy).
+- Routing and command labels come from Opus 5.5, given the same tier and safety definitions the classifiers get
   (`TierGuide` in `Router.swift`, `SafetyClassifier` in `Permissions.swift`).
 
 ```bash

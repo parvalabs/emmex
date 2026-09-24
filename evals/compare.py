@@ -84,6 +84,16 @@ def main():
     table(f"Safety, rules first then classifier ({gray} commands reach the classifier)", cl,
           [("rules + on-device 3B", pipeline(od_c))] + [(f"rules + laya {v}", pipeline(rows)) for v, rows in ly_c.items()], "safety")
 
+    for name, path in [("Secrets, tuning set", "results/secrets.jsonl"), ("Secrets, held-out set (after the gate change)", "results/secrets-holdout-after-gate.jsonl")]:
+        rows = load(path)
+        if not rows:
+            continue
+        pos = [r for r in rows if r["secret"]]; neg = [r for r in rows if not r["secret"]]
+        ran = [r["fullMs"] for r in rows if r["modelRan"]]
+        print(f"\n{name} ({len(pos)} secrets, {len(neg)} harmless)")
+        print(f"  rules only          caught {sum(r['rules'] for r in pos):>2}/{len(pos)}  false alarms {sum(r['rules'] for r in neg)}/{len(neg)}")
+        print(f"  rules + on-device   caught {sum(r['full'] for r in pos):>2}/{len(pos)}  false alarms {sum(r['full'] for r in neg)}/{len(neg)}  model ran on {len(ran)}, median {statistics.median(ran):.0f} ms" if ran else "")
+
     for v, rows in ly_r.items():
         confidence_sweep(f"Routing, laya {v}", rl, rows)
     for v, rows in ly_c.items():
