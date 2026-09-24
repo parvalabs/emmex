@@ -17,6 +17,14 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Safety
 
+- **Smart mode runs publishing and global commands unasked** (2026-09-24, found by `evals/`):
+  the 3B judge calls these safe in the gray zone, so they run without a prompt: `npm publish`
+  (labelled dangerous), `git push origin main`, `pip install --user`, `pip install -r` and
+  `bundle install` outside a venv, `defaults write`, and `git rebase main`. Add deterministic
+  rules for publishing commands (`npm|cargo|gem publish`, `twine upload`, `git push`, `gh pr
+  create`), user-global installs and `defaults write` before the classifier runs, then re-run
+  `python3 evals/compare.py` and check the rules-first table has no unsafe allows.
+
 - **Kernel violation log** (2026-09-23): Seatbelt denials could not be read from the unified
   log on macOS 27 (neither `log show` predicates nor `(trace)` produced entries); today the
   tool only detects "Operation not permitted" in output. Find the right subsystem or use a
@@ -67,6 +75,10 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Done
 
+- **Laya as router or safety judge** (2026-09-24, evaluated, not adopted): on `evals/` the
+  0.4B encoder is 15 to 20 times faster than the 3B judge but much less accurate. Routing 48%
+  vs 81%, and it rarely predicts frontier. Safety: 22 unsafe allows vs 8 for the 3B, or 4
+  with a yes/no decomposition that asks needlessly on 14 of 26 safe commands.
 - **MLX model residency** (2026-09-24, `0152402`): several models stay loaded with LRU eviction;
   sidebar list, per-model unload, loaded tags in the picker, loading state on the model chip.
 - **KV-cache reuse for MLX turns** (2026-09-24, `71b6820`): vendored mlx-swift-lm with a prefix-cache
