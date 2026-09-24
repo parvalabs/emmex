@@ -283,7 +283,11 @@ public final class AgentSession: @unchecked Sendable {
             if case .toolCalls(let c) = e { return c.map(\.toolName).joined(separator: ",") } else { return nil }
         }.joined(separator: " ")
         do {
-            var facts = try await MemoryExtractor.extract(prompt: prompt, response: response, toolSummary: tools)
+            // Turns that already used Claude extract with the cheap tier (when that is Claude too);
+            // local turns stay fully on-device.
+            var extractor: ModelSpec? = nil
+            if case .claude = effectiveSpec, case .claude = await TierResolver.current().spec(for: .cheap) { extractor = await TierResolver.current().spec(for: .cheap) }
+            var facts = try await MemoryExtractor.extract(prompt: prompt, response: response, toolSummary: tools, model: extractor)
             // Without tool output the assistant's claims about the project are unverified (small
             // models invent stacks and audits); keep only what the user themselves established.
             if tools.isEmpty { facts = facts.filter { $0.scope == "user" || $0.kind == "preference" || $0.kind == "decision" } }

@@ -296,7 +296,9 @@ public enum MemoryExtractor {
     worth remembering.
     """
 
-    public static func extract(prompt: String, response: String, toolSummary: String) async throws -> [(text: String, kind: String, scope: String)] {
+    /// `model` nil uses the on-device model; a Claude spec (the cheap tier) extracts far cleaner facts
+    /// and is worth it when the turn already paid for Claude.
+    public static func extract(prompt: String, response: String, toolSummary: String, model: ModelSpec? = nil) async throws -> [(text: String, kind: String, scope: String)] {
         let fact = DynamicGenerationSchema(name: "Fact", properties: [
             .init(name: "text", description: "One short self-contained sentence", schema: SchemaBuilder.string),
             .init(name: "kind", description: "Category", schema: SchemaBuilder.choice("Kind", ["preference", "project", "decision", "reference", "other"])),
@@ -305,7 +307,9 @@ public enum MemoryExtractor {
         let schema = try GenerationSchema(root: DynamicGenerationSchema(name: "Facts", properties: [
             .init(name: "facts", description: "Zero to four facts", schema: DynamicGenerationSchema(arrayOf: fact, minimumElements: 0, maximumElements: 4)),
         ]), dependencies: [])
-        let session = LanguageModelSession(model: .default, instructions: instructions)
+        let session: LanguageModelSession
+        if let model { session = try await Backends.makeSession(model, tools: [], instructions: instructions) }
+        else { session = LanguageModelSession(model: .default, instructions: instructions) }
         let input = "User: \(prompt.prefix(1500))\n\nAgent: \(response.prefix(1500))\n\nTools used: \(toolSummary.prefix(400))"
         let r = try await session.respond(to: input, schema: schema, options: GenerationOptions(maximumResponseTokens: 300))
         let items = try r.content.value([GeneratedContent].self, forProperty: "facts")
