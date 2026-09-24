@@ -290,8 +290,9 @@ function bucket(ms) { const d = new Date(ms), now = new Date(); const day = 864e
   return now - d < 7 * day ? 'Previous 7 days' : 'Older'; }
 function renderSessions() {
   const box = $('#sessions'); box.innerHTML = '';
-  if (!S.sessions.length) { box.append(el('div', 'small', S.workspace ? 'No sessions yet.' : 'Choose a folder to start.')).style.padding = '12px'; return; }
-  const groups = {}; for (const s of S.sessions) (groups[bucket(s.updatedAt)] ||= []).push(s);
+  const mine = S.sessions.filter(s => (s.mode || 'code') === S.mode);
+  if (!mine.length) { const e = el('div', 'small', S.workspace ? `No ${S.mode} sessions yet.` : 'Choose a folder to start.'); e.style.padding = '12px'; box.append(e); return; }
+  const groups = {}; for (const s of mine) (groups[bucket(s.updatedAt)] ||= []).push(s);
   for (const b of ['Today', 'Yesterday', 'Previous 7 days', 'Older']) {
     if (!groups[b]) continue; box.append(el('div', 'sec', b));
     for (const s of groups[b]) {

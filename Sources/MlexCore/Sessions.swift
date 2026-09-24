@@ -79,6 +79,7 @@ public struct SessionSummary: Identifiable, Sendable, Hashable {
     public var worktree: String?
     public var updatedAt: Date
     public var turns: Int
+    public var mode: SessionMode
 }
 
 /// Sessions live at Application Support/mlex/sessions/<workspace-key>/<id>.json.
@@ -146,7 +147,7 @@ public enum SessionStore {
         return files.filter { $0.hasSuffix(".json") }.compactMap { f -> SessionSummary? in
             guard let data = try? Data(contentsOf: dir.appending(path: f)),
                   let r = try? decoder.decode(SessionRecord.self, from: data) else { return nil }
-            return SessionSummary(id: r.id, title: Self.cleanTitle(r), model: r.model, worktree: r.worktree, updatedAt: r.updatedAt, turns: r.turns)
+            return SessionSummary(id: r.id, title: Self.cleanTitle(r), model: r.model, worktree: r.worktree, updatedAt: r.updatedAt, turns: r.turns, mode: r.mode)
         }.sorted { $0.updatedAt > $1.updatedAt }
     }
 }

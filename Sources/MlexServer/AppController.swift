@@ -64,7 +64,7 @@ public final class AppController {
         var d: [String: Any] = [
             "workspace": workspace.map { ["path": $0.path, "name": $0.lastPathComponent] } as Any,
             "recents": recents.map { ["path": $0.path, "name": $0.name] },
-            "sessions": sessions.map { ["id": $0.id, "title": $0.title, "model": $0.model, "worktree": $0.worktree as Any, "updatedAt": ms($0.updatedAt), "turns": $0.turns] },
+            "sessions": sessions.map { ["id": $0.id, "title": $0.title, "model": $0.model, "worktree": $0.worktree as Any, "updatedAt": ms($0.updatedAt), "turns": $0.turns, "mode": $0.mode.rawValue] },
             "timeline": timeline.map(\.json),
             "busy": busy, "queue": queue,
             "selected": selected.description, "effort": effort.rawValue,
@@ -157,7 +157,11 @@ public final class AppController {
             }
             w.resume(returning: (allow, always)); push()
         case "set_mode":
-            if let m = str("mode"), let sm = SessionMode(rawValue: m), sm != mode { mode = sm; newSession() }
+            // Each mode keeps its own session list: switching resumes that mode's latest session, or starts one.
+            if let m = str("mode"), let sm = SessionMode(rawValue: m), sm != mode {
+                mode = sm
+                if let last = sessions.first(where: { $0.mode == sm }) { resume(last.id) } else { newSession() }
+            }
         case "set_permission":
             if let p = str("permission"), let pl = PermissionLevel(rawValue: p) { permission = pl; if let cur = current { await cur.setPermission(pl) }; push() }
         case "set_trust":

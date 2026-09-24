@@ -13,6 +13,9 @@
     <button id="workspace" class="ws" title="Switch workspace">
       <span class="ws-icon">▣</span><span id="ws-name" class="ws-name">Open a folder</span><span class="ws-chev">⌄</span>
     </button>
+    <div class="modes side" id="modes">
+      <button data-mode="chat" class="seg">Chat</button><button data-mode="code" class="seg on">Code</button>
+    </div>
     <div class="row">
       <button id="new-session" class="new"><span class="ico">✎</span>New session<kbd>⌘N</kbd></button>
       <button id="new-worktree" class="icon-btn" title="New session on a git worktree">⑂</button>
@@ -31,10 +34,7 @@
         <span id="title" class="title" title="Double-click to rename"></span>
         <span id="worktree" class="badge hidden"></span>
       </div>
-      <div class="modes" id="modes">
-        <button data-mode="chat" class="seg">Chat</button><button data-mode="code" class="seg on">Code</button>
-      </div>
-      <button id="perm-btn" class="chip" title="Permission level for tool calls"><span id="perm-label">Smart</span><span class="chev">⌄</span></button>
+      <span class="spacer"></span>
       <button id="panel-btn" class="chip" title="Activity and changes (⌘J)"><span>Activity</span><span id="panel-count" class="cnt hidden"></span></button>
       <button id="context" class="ctx hidden" title="Context used. Click to compact.">
         <svg viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="6" class="ring-bg"/><circle id="ring" cx="8" cy="8" r="6" class="ring-fg"/></svg>
@@ -53,9 +53,10 @@
       <div id="composer" class="composer">
         <textarea id="input" rows="1" placeholder="How can I help?  Type / for skills and templates"></textarea>
         <div class="bar">
+          <button id="perm-btn" class="chip" title="Permission level for tool calls"><span class="shield">⛨</span><span id="perm-label">Smart</span><span class="chev">⌄</span></button>
+          <span class="spacer"></span>
           <button id="model-btn" class="chip"><span id="model-label">system</span><span class="chev">⌄</span></button>
           <button id="effort-btn" class="chip"><span class="brain">◐</span><span id="effort-label">Effort</span></button>
-          <span class="spacer"></span>
           <button id="stop" class="round stop hidden" title="Stop (⌘.)">■</button>
           <button id="send" class="round send" title="Send (⌘↩)" disabled>↑</button>
         </div>
