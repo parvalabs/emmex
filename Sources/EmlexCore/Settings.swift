@@ -19,7 +19,7 @@ public struct Settings: Codable, Sendable {
     public init() {}
 
     // Every key is optional in the file: a partial settings.json keeps the defaults for the rest.
-    enum CodingKeys: String, CodingKey { case routes, router, memory, providers, permission, sandbox, network, unsandboxedRetry, secretScan }
+    enum CodingKeys: String, CodingKey { case routes, router, memory, providers, permission, sandbox, network, unsandboxedRetry, secretScan, models }
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         routes = try c.decodeIfPresent(Routes.self, forKey: .routes) ?? Routes()
@@ -31,6 +31,7 @@ public struct Settings: Codable, Sendable {
         network = try c.decodeIfPresent(Network.self, forKey: .network) ?? Network()
         unsandboxedRetry = try c.decodeIfPresent(Bool.self, forKey: .unsandboxedRetry) ?? true
         secretScan = try c.decodeIfPresent(Bool.self, forKey: .secretScan) ?? true
+        models = try c.decodeIfPresent([String: ModelPrefs].self, forKey: .models) ?? [:]
     }
     /// "ondevice" (default) or "jev" (TypeSafe Jev; needs a key in Keychain service `emlex-jev` or JEV_API_KEY).
     public var router: String = "ondevice"
@@ -54,6 +55,13 @@ public struct Settings: Codable, Sendable {
     public var unsandboxedRetry: Bool = true
     /// Block messages that contain passwords, tokens or keys before they reach any model.
     public var secretScan: Bool = true
+    /// Per-model preferences, keyed by MLX model id.
+    public struct ModelPrefs: Codable, Sendable {
+        /// Context window in tokens; nil uses the model's default.
+        public var context: Int?
+        public init(context: Int? = nil) { self.context = context }
+    }
+    public var models: [String: ModelPrefs] = [:]
 
     /// OpenAI-compatible chat-completions providers, keyed by the name used in specs (`<name>:<model>`).
     public struct Provider: Codable, Sendable, Hashable {

@@ -407,7 +407,7 @@ function menu(x, y, entries) {
   m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px'; m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
 }
 document.addEventListener('mousedown', (e) => { if (!$('#menu').contains(e.target)) $('#menu').classList.add('hidden'); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#menu').classList.add('hidden'); closeModal(); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const busy = !$('#modal').classList.contains('hidden') || !$('#menu').classList.contains('hidden') || document.querySelector('body > .modal'); $('#menu').classList.add('hidden'); closeModal(); if (!busy && modelsOpen()) closeModels(); } });
 function anchorMenu(btn, entries) { const r = btn.getBoundingClientRect(); menu(r.left, r.top - 8 - Math.min(400, entries.length * 30), entries); const m = $('#menu'); const mr = m.getBoundingClientRect(); m.style.top = (r.top - mr.height - 6) + 'px'; }
 
 $('#model-btn').onclick = (ev) => { ev.stopPropagation();
@@ -494,25 +494,164 @@ function openModal(build) { const c = $('#modal-card'); c.innerHTML = ''; build(
 function closeModal() { $('#modal').classList.add('hidden'); }
 $('#modal').addEventListener('mousedown', (e) => { if (e.target === $('#modal')) closeModal(); });
 function header(c, text) { const h = el('h2', '', text); const x = el('button', 'x', '✕'); x.onclick = closeModal; h.append(x); c.append(h); }
-function openModels() {
-  openModal((c) => {
-    header(c, 'Models');
-    for (const b of S.backends) {
-      const r = el('div', 'mrow'); r.append(el('span', 'dot2' + (b.available ? ' on' : '')));
-      const g = el('div', 'grow'); g.append(el('div', 'spec', b.spec), el('div', 'det', b.detail)); r.append(g);
-      if (b.spec.startsWith('mlx:')) { const id = b.spec.slice(4);
-        if (S.loading === id) r.append(el('span', 'small', 'loading…'));
-        else if ((S.residents || []).some(x => x.id === id)) { const u = el('button', 'btn', 'Unload'); u.onclick = () => act({ type: 'unload', id }); r.append(u); }
-        const d = el('button', 'btn danger', 'Remove'); d.onclick = async () => { const size = b.detail ? ` (${b.detail})` : ''; if (await confirmDialog('Remove model?', `Delete ${id}${size} from disk. You can pull it again later.`, 'Remove', true)) act({ type: 'remove_model', id }); }; r.append(d); }
-      c.append(r);
-    }
-    c.append(el('h3', '', 'Pull from Hugging Face'));
-    const row = el('div', 'pull'); const f = el('input', 'text'); f.placeholder = 'mlx-community/…'; f.value = 'mlx-community/Qwen3-4B-4bit';
-    const p = el('button', 'btn primary', 'Pull'); p.onclick = () => act({ type: 'pull', id: f.value }); f.onkeydown = (e) => { if (e.key === 'Enter') p.click(); }; row.append(f, p); c.append(row);
-    const pulls = el('div'); pulls.id = 'pulls'; c.append(pulls); renderPulls();
-    c.append(el('p', 'small', `Loaded models stay in memory and are shared across sessions; when memory runs short the least recently used one is unloaded first. Free now: ${S.free}. Weights live in ~/.cache/emlex/models.`));
-  });
+/* ---------- models view (full screen) ---------- */
+let mvSelected = null, mvDragging = false;
+const fmtBytes = (n) => { if (n == null) return ''; const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (n >= 1024 && i < 4) { n /= 1024; i++; } return (i >= 3 ? n.toFixed(1) : Math.round(n)) + ' ' + u[i]; };
+const fmtTokens = (n) => n % 1024 === 0 && n >= 1024 ? (n / 1024) + 'K' : n >= 1000 ? Math.round(n / 1000) + 'K' : String(n);
+function openModels() { $('#app').classList.add('view-models'); $('#models-view').classList.remove('hidden'); if (!mvSelected) mvSelected = S.selected !== 'auto' ? S.selected : (S.models[0] ? 'mlx:' + S.models[0].id : 'system'); renderModelsView(); }
+function closeModels() { $('#app').classList.remove('view-models'); $('#models-view').classList.add('hidden'); }
+const modelsOpen = () => !$('#models-view').classList.contains('hidden');
+$('#mv-back').onclick = closeModels;
+$('#mv-add').onclick = () => addFromFolder();
+
+function renderModelsView() {
+  if (!S || !modelsOpen()) return;
+  $('#mv-mem').textContent = `${fmtBytes(S.memFree)} free of ${fmtBytes(S.memTotal)}`;
+  renderModelList(); if (!mvDragging) renderModelDetail();
 }
+
+function renderModelList() {
+  const box = $('#mv-list'); const typing = box.querySelector('.mv-pull input');
+  if (typing && document.activeElement === typing) { renderPulls(); return; }   // don't steal focus mid-typing
+  const keep = typing?.value; box.innerHTML = '';
+  const pull = el('div', 'mv-pull'); const f = el('input'); f.placeholder = 'mlx-community/Qwen3-4B-4bit'; f.value = keep ?? '';
+  const p = el('button', 'btn primary', 'Pull'); p.title = 'Download from Hugging Face'; p.onclick = () => { if (f.value.trim()) act({ type: 'pull', id: f.value.trim() }); };
+  f.onkeydown = (e) => { if (e.key === 'Enter') p.click(); }; pull.append(f, p); box.append(pull);
+  const pulls = el('div'); pulls.id = 'pulls'; box.append(pulls); renderPulls();
+  const resident = new Set((S.residents || []).map(r => 'mlx:' + r.id));
+  const item = (spec, name, meta, dotCls) => {
+    const r = el('div', 'mv-item' + (mvSelected === spec ? ' on' : '')); r.append(el('span', 'dot2 ' + dotCls), el('span', 'n', name), el('span', 'm', meta));
+    r.onclick = () => { mvSelected = spec; renderModelsView(); }; return r;
+  };
+  box.append(el('div', 'sec', 'Local MLX'));
+  if (!S.models.length) box.append(el('div', 'small', 'No models yet. Pull one above or add a folder.')).style.padding = '4px 8px';
+  for (const m of S.models) {
+    const spec = 'mlx:' + m.id; const loaded = resident.has(spec) || S.loading === m.id;
+    box.append(item(spec, shortModel(m.id), S.loading === m.id ? 'loading…' : loaded ? 'loaded' : fmtBytes(m.size), loaded ? 'loaded' : 'on'));
+  }
+  const others = S.backends.filter(b => !b.spec.startsWith('mlx:') && !b.spec.endsWith(':<model>'));
+  const groups = [['Apple', b => ['system', 'pcc', 'auto'].includes(b.spec)], ['Claude', b => b.spec.startsWith('claude:')], ['Providers', b => !['system', 'pcc', 'auto'].includes(b.spec) && !b.spec.startsWith('claude:')]];
+  for (const [title, test] of groups) {
+    const list = others.filter(test); if (!list.length) continue; box.append(el('div', 'sec', title));
+    for (const b of list) box.append(item(b.spec, b.spec === 'auto' ? 'auto (router)' : b.spec, S.backendContext[b.spec] ? fmtTokens(S.backendContext[b.spec]) : '', b.available ? 'on' : ''));
+  }
+}
+
+function contextOptions(max) {
+  const opts = []; for (let n = 2048; n < max; n *= 2) opts.push(n);
+  opts.push(max); return opts;
+}
+
+function renderModelDetail() {
+  const box = $('#mv-detail'); box.innerHTML = ''; const inner = el('div', 'inner'); box.append(inner);
+  const spec = mvSelected; if (!spec) { inner.append(el('div', 'mv-empty', 'Select a model.')); return; }
+  const inUse = S.current && (S.selected === spec || S.current.effectiveModel === spec);
+  const acts = el('div', 'mv-actions');
+  const use = el('button', 'btn primary', inUse ? 'Used by this session' : 'Use in this session'); use.disabled = inUse || !S.current;
+  use.onclick = () => act({ type: 'select_model', spec }); acts.append(use);
+  if (!spec.startsWith('mlx:')) {
+    const b = S.backends.find(x => x.spec === spec) || { detail: '' };
+    inner.append(el('h2', '', spec === 'auto' ? 'Auto' : spec), el('div', 'fullid', b.detail));
+    const badges = el('div', 'mv-badges'); badges.append(el('span', 'badge ' + (b.available ? 'ok' : 'dim'), b.available ? 'available' : 'not available')); if (inUse) badges.append(el('span', 'badge', 'in use')); inner.append(badges, acts);
+    const card = el('div', 'mv-card'); card.append(el('h3', '', 'Context window'));
+    const ctx = S.backendContext[spec];
+    card.append(el('div', 'mv-ctx-top')).append(el('span', 'big', ctx ? `${ctx.toLocaleString()} tokens` : spec === 'auto' ? 'Depends on the routed model' : 'Unknown'));
+    card.append(el('p', 'mv-note', spec === 'auto' ? 'Auto routes each message to the model configured for its tier, so the window is that model\'s.' : 'Set by the provider; emlex compacts the conversation before it fills.'));
+    inner.append(card); return;
+  }
+  const m = S.models.find(x => 'mlx:' + x.id === spec); if (!m) { inner.append(el('div', 'mv-empty', 'This model is no longer installed.')); return; }
+  const loaded = (S.residents || []).some(r => r.id === m.id);
+  inner.append(el('h2', '', shortModel(m.id)), el('div', 'fullid', m.id));
+  const badges = el('div', 'mv-badges');
+  badges.append(el('span', 'badge ' + (loaded ? 'ok' : 'dim'), S.loading === m.id ? 'loading…' : loaded ? 'loaded in memory' : 'not loaded'));
+  if (inUse) badges.append(el('span', 'badge', 'in use by this session'));
+  if (m.linked) badges.append(el('span', 'badge dim', 'used in place'));
+  inner.append(badges);
+  if (loaded) { const u = el('button', 'btn', 'Unload'); u.onclick = () => act({ type: 'unload', id: m.id }); acts.append(u); }
+  const rm = el('button', 'btn danger', m.linked ? 'Remove from emlex' : 'Delete from disk');
+  rm.onclick = async () => {
+    const ok = m.linked
+      ? await confirmDialog('Remove from emlex?', `emlex stops listing ${m.id}. The files stay in ${m.path}.`, 'Remove')
+      : await confirmDialog('Delete model?', `Delete ${m.id} (${fmtBytes(m.size)}) from disk. You can pull it again later.`, 'Delete', true);
+    if (ok) { act({ type: 'remove_model', id: m.id }); mvSelected = null; }
+  };
+  acts.append(rm); inner.append(acts);
+
+  const where = el('div', 'mv-card'); where.append(el('h3', '', 'Location'));
+  const path = el('div', 'mv-path'); path.append(el('span', 'p', m.path));
+  const rev = el('button', 'btn', 'Reveal in Finder'); rev.onclick = () => act({ type: 'reveal_path', path: m.path });
+  const cp = el('button', 'btn', 'Copy'); cp.onclick = () => { navigator.clipboard?.writeText(m.path); cp.textContent = 'Copied'; setTimeout(() => cp.textContent = 'Copy', 1200); };
+  path.append(rev, cp); where.append(path);
+  if (m.linked) where.append(el('p', 'mv-note', 'Used in place: emlex reads the files from this folder and never modifies or deletes them.'));
+  inner.append(where);
+
+  const facts = el('div', 'mv-card'); facts.append(el('h3', '', 'Details'));
+  const g = el('div', 'mv-facts');
+  const row = (k, v) => g.append(el('span', 'k', k), el('span', '', v));
+  row('Size on disk', fmtBytes(m.size));
+  row('Architecture', m.modelType);
+  row('Layers', m.attentionLayers && m.attentionLayers !== m.layers ? `${m.layers}, of which ${m.attentionLayers} use attention` : String(m.layers || '?'));
+  if (m.quantBits) row('Quantization', `${m.quantBits}-bit`);
+  row('Longest context', `${m.maxContext.toLocaleString()} tokens`);
+  row('KV cache per token', fmtBytes(m.kvPerToken));
+  facts.append(g); inner.append(facts);
+
+  // Context window: bounded by the model, priced in memory.
+  const card = el('div', 'mv-card mv-ctx'); card.append(el('h3', '', 'Context window'));
+  const opts = contextOptions(m.maxContext);
+  let idx = opts.indexOf(m.context); if (idx < 0) idx = opts.findIndex(n => n >= m.context); if (idx < 0) idx = opts.length - 1;
+  const top = el('div', 'mv-ctx-top'); const big = el('span', 'big'); const sub = el('span', 'sub'); top.append(big, sub); card.append(top);
+  const range = el('input'); range.type = 'range'; range.min = 0; range.max = opts.length - 1; range.step = 1; range.value = idx; card.append(range);
+  const ticks = el('div', 'mv-ticks'); ticks.append(el('span', '', fmtTokens(opts[0])), el('span', '', fmtTokens(opts[opts.length - 1]))); card.append(ticks);
+  const bar = el('div', 'mv-membar'); const bw = el('span', 'w'); const bkv = el('span', 'kv'); bar.append(bw, bkv); card.append(bar);
+  const memText = el('div', 'mv-memtext'); card.append(memText);
+  const reset = el('button', 'btn', 'Use default'); reset.style.marginTop = '10px';
+  reset.onclick = () => act({ type: 'set_model_context', id: m.id, context: null });
+  const show = (i) => {
+    const n = opts[i]; const kv = m.kvPerToken * n; const total = m.size + kv; const budget = S.memTotal;
+    big.textContent = `${fmtTokens(n)} tokens`;
+    sub.textContent = n === m.defaultContext ? 'default' : n === m.maxContext ? 'the model\'s maximum' : '';
+    bw.style.width = Math.min(100, m.size / budget * 100) + '%'; bkv.style.width = Math.min(100, kv / budget * 100) + '%';
+    const warn = total > budget * 0.7; bar.classList.toggle('warn', warn); memText.classList.toggle('warn', warn);
+    memText.innerHTML = '';
+    memText.append('Weights ', el('b', '', fmtBytes(m.size)), ' + KV cache at this size ', el('b', '', fmtBytes(kv)), ' = ', el('b', '', fmtBytes(total)), ` of ${fmtBytes(budget)}.`);
+    if (warn) memText.append(' Likely to swap on this Mac; pick a smaller window.');
+  };
+  show(idx);
+  range.oninput = () => { mvDragging = true; show(+range.value); };
+  range.onchange = () => { mvDragging = false; const n = opts[+range.value]; act({ type: 'set_model_context', id: m.id, context: n === m.defaultContext ? null : n }); };
+  card.append(el('p', 'mv-note', 'emlex compacts the conversation before it reaches this size, so the window also caps how much memory the model\'s KV cache can grow to.'));
+  if (m.contextSetting != null) card.append(reset);
+  inner.append(card);
+}
+
+/* Add a model that is already on disk: use its folder in place, or copy it into the library. */
+function addFromFolder() {
+  const modal = el('div', 'modal'); const card = el('div', 'modal-card');
+  card.append(el('h2', '', 'Add model from folder'));
+  card.append(el('p', 'small', 'The folder needs config.json, .safetensors weights and tokenizer files, as downloaded from Hugging Face.'));
+  const choice = el('div', 'mv-choice');
+  const opt = (value, title, desc, checked) => { const l = el('label'); const r = el('input'); r.type = 'radio'; r.name = 'addmode'; r.value = value; r.checked = checked; const t = el('span', '', title); t.append(el('span', 'd', desc)); l.append(r, t); return l; };
+  choice.append(opt('link', 'Use in place', 'No copy. emlex reads the folder where it is and never deletes it.', true),
+                opt('copy', 'Copy into the library', `Copies it to ~/.cache/emlex/models, so the original can be deleted.`, false));
+  card.append(choice);
+  let pathInput = null;
+  if (!S.nativePanels) { pathInput = el('input', 'dialog-input'); pathInput.placeholder = '/path/to/model-folder'; card.append(pathInput); }
+  const err = el('div', 'small'); err.style.color = 'var(--err)'; err.style.marginBottom = '8px'; card.append(err);
+  const buttons = el('div', 'dialog-buttons');
+  const cancel = el('button', 'dialog-btn', 'Cancel'); const go = el('button', 'dialog-btn dialog-ok', S.nativePanels ? 'Choose folder…' : 'Add');
+  buttons.append(cancel, go); card.append(buttons); modal.append(card); document.body.append(modal);
+  const close = () => modal.remove();
+  cancel.onclick = close; modal.onclick = (e) => { if (e.target === modal) close(); };
+  go.onclick = async () => {
+    const copy = card.querySelector('input[name=addmode]:checked').value === 'copy';
+    const a = { type: 'add_model_folder', copy }; if (pathInput) { if (!pathInput.value.trim()) { err.textContent = 'Enter the folder path.'; return; } a.path = pathInput.value.trim(); }
+    go.disabled = true; const r = await act(a); go.disabled = false;
+    if (r && r.error) { if (r.error !== 'no folder chosen') err.textContent = r.error; return; }
+    close(); if (r && r.id) { mvSelected = 'mlx:' + r.id; renderModelsView(); }
+  };
+}
+
 function renderPulls() {
   const box = $('#pulls'); if (!box) return; box.innerHTML = '';
   for (const [id, frac] of Object.entries(S.pulls)) { const r = el('div', 'pull'); r.append(el('span', '', id)); const pr = el('progress'); pr.max = 1; pr.value = frac; r.append(pr, el('span', '', Math.round(frac * 100) + '%'));
@@ -549,7 +688,7 @@ function openTools() {
 function applyState(s) {
   const structural = !S || S.timeline.length !== s.timeline.length || !S.current || !s.current || S.current.id !== s.current.id || S.busy !== s.busy || S.mode !== s.mode || (S.routes || []).length !== (s.routes || []).length;
   const wasBusy = S && S.busy;
-  S = s; renderSessions(); renderChrome(); renderPulls();
+  S = s; renderSessions(); renderChrome(); renderPulls(); renderModelsView();
   if (structural) renderTimeline();
   else if (wasBusy && !s.busy) { runs.forEach(finishTurn); panelUpdate(); refreshGitDiff(); }
 }

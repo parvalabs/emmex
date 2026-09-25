@@ -33,6 +33,8 @@ public final class AppController {
     var pendingSpec: ModelSpec?  // spec to apply after current load completes
     var effort: Effort = .default
     var backends: [Backends.Status] = []
+    var modelInfos: [[String: Any]] = []
+    var backendContext: [String: Int] = [:]
     var loadingID: String?, residentID: String?
     var residents: [[String: Any]] = []
     private var uncheckedQueue: Set<String> = []   // queued texts that skipped the secret scan
@@ -72,6 +74,8 @@ public final class AppController {
             "selected": selected.description, "effort": effort.rawValue,
             "backends": backends.map { ["spec": $0.spec, "available": $0.available, "detail": $0.detail] },
             "loading": loadingID as Any, "resident": residentID as Any, "residents": residents,
+            "models": modelInfos, "backendContext": backendContext,
+            "memTotal": SystemMemory.total, "memFree": SystemMemory.available(),
             "footprint": SystemMemory.format(footprint), "free": SystemMemory.format(SystemMemory.available()),
             "pulls": pulls, "pullErrors": pullErrors,
             "mcp": mcpSummary.map { ["server": $0.server, "info": $0.info, "tools": $0.tools] },
@@ -115,6 +119,19 @@ public final class AppController {
         residentID = await ModelStore.shared.residentID
         residents = await ModelStore.shared.residentModels().map { ["id": $0.id, "size": SystemMemory.format($0.sizeBytes)] }
         footprint = SystemMemory.footprint()
+        var infos: [[String: Any]] = []
+        for m in await ModelStore.shared.installed() {
+            let i = await ModelStore.shared.info(for: m.id)
+            infos.append(["id": i.id, "path": i.path, "linked": i.linked, "size": i.sizeBytes, "modelType": i.modelType,
+                          "layers": i.layers, "attentionLayers": i.attentionLayers, "quantBits": i.quantBits as Any,
+                          "maxContext": i.maxContext, "defaultContext": i.defaultContext, "context": i.context,
+                          "contextSetting": i.contextSetting as Any, "kvPerToken": i.kvBytesPerToken])
+        }
+        modelInfos = infos
+        // Context windows of the other backends, for the models view (PCC is asked only when available).
+        for b in backends where !b.spec.hasPrefix("mlx:") && b.available && !b.spec.hasSuffix(":<model>") {
+            if let spec = try? ModelSpec(parsing: b.spec), spec != .pcc, spec != .auto { backendContext[b.spec] = await Compactor.contextSize(for: spec) }
+        }
     }
 
     // MARK: actions
@@ -150,6 +167,52 @@ public final class AppController {
         case "set_effort": if let e = str("effort"), let ef = Effort(rawValue: e) { effort = ef; push() }
         case "compact": compact()
         case "pull": if let id = str("id") { pull(id) }
+        case "set_model_context":
+            guard let id = str("id") else { break }
+            var st = Settings.load()
+            let value = a["context"] as? Int
+            var prefs = st.models[id] ?? .init(); prefs.context = value
+            st.models[id] = prefs.context == nil ? nil : prefs
+            do { try st.save() } catch { return ["error": "could not save settings: \(error.localizedDescription)"] }
+            await refreshModels(); await updateContext(); push()
+        case "add_model_folder":
+            var url = str("path").map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }
+            if url == nil, canUseNativePanels {
+                let panel = NSOpenPanel()
+                panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
+                panel.message = "Choose a folder with an MLX model (config.json, .safetensors, tokenizer)"
+                panel.prompt = "Add Model"
+                if panel.runModal() == .OK { url = panel.url }
+            }
+            guard let src = url else { return ["error": "no folder chosen"] }
+            do { try ModelStore.validateFolder(src) } catch { return ["error": "\(error)"] }
+            if (a["copy"] as? Bool) == true {
+                let id: String, dest: URL
+                do { (id, dest) = try await ModelStore.shared.reserveCopy(of: src) } catch { return ["error": "\(error)"] }
+                pulls[id] = 0; push()
+                pullTasks[id] = Task.detached { [weak self] in
+                    do {
+                        try ModelStore.copyFolder(src, to: dest) { f in Task { @MainActor in self?.pulls[id] = f; self?.emit("pull", ["id": id, "fraction": f]) } }
+                        await MainActor.run { self?.info("copied \(src.path) into the library as \(id)") }
+                    } catch {
+                        try? FileManager.default.removeItem(at: dest)
+                        await MainActor.run { self?.pullErrors[id] = error is CancellationError ? "cancelled" : "\(error.localizedDescription)" }
+                    }
+                    await MainActor.run { self?.pulls[id] = nil; self?.pullTasks[id] = nil }
+                    await self?.refreshModels(); await MainActor.run { self?.push() }
+                }
+                return ["ok": true, "id": id]
+            }
+            do {
+                let id = try await ModelStore.shared.link(src)
+                info("added \(src.path) as \(id); its files stay where they are")
+                await refreshModels(); push()
+                return ["ok": true, "id": id]
+            } catch { return ["error": "\(error)"] }
+        case "reveal_path":
+            guard let path = str("path"), FileManager.default.fileExists(atPath: path) else { return ["error": "no such path"] }
+            let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/open"); p.arguments = ["-R", path]
+            try? p.run()
         case "cancel_pull": if let id = str("id") { pullTasks[id]?.cancel() }
         case "remove_model":
             if let id = str("id") {

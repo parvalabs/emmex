@@ -69,6 +69,10 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## App
 
+- **KV cache in the load check** (2026-09-25): the "expect swapping" warning and LRU eviction
+  count only weights (+15%). Add the KV cache at the model's context window
+  (`ModelInfo.kvBytes(at:)`) so an 8B model at 32K (4.3 GB + 4.5 GB) is judged by its real size.
+
 - **Terminal pane** (2026-09-23): a real terminal tab in the right panel (user-driven shell in the
   workspace, sandbox-aware), like Claude Desktop's.
 - **Browser pane** (2026-09-23): an embedded browser tab the agent can drive and the user can

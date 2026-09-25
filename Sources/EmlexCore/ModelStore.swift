@@ -29,17 +29,29 @@ public actor ModelStore {
         residents.reversed().map { Resident(id: $0, sizeBytes: Self.size(of: directory(for: $0))) }
     }
 
+    /// Models used in place from a folder outside the library: id (`local/<name>`) → path.
+    /// Their files belong to the user; removing one only unregisters it.
+    var linked: [String: String] = [:]
+    let linkedFile: URL
+
     public init(root: URL? = nil) {
         self.root = root ?? Paths.cacheRoot.appending(path: "models")
+        self.linkedFile = (root == nil ? Paths.appSupport : self.root).appending(path: "linked-models.json")
+        self.linked = (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: linkedFile))) ?? [:]
     }
 
     public struct Installed: Sendable, Identifiable {
         public var id: String
         public var directory: URL
         public var sizeBytes: Int64
+        public var linked: Bool = false
     }
 
-    public func directory(for id: String) -> URL { root.appending(path: id) }
+    public func directory(for id: String) -> URL {
+        if let path = linked[id] { return URL(fileURLWithPath: path) }
+        return root.appending(path: id)
+    }
+    public func isLinked(_ id: String) -> Bool { linked[id] != nil }
 
     static let marker = ".emlex-complete"
     static let legacyMarker = ".mlex-complete"   // pulls finished before the rename
@@ -47,6 +59,7 @@ public actor ModelStore {
     /// Installed means the pull finished: a completion marker is written after the last file.
     public func isInstalled(_ id: String) -> Bool {
         let dir = directory(for: id)
+        if linked[id] != nil { return FileManager.default.fileExists(atPath: dir.appending(path: "config.json").path) }
         return [Self.marker, Self.legacyMarker].contains { FileManager.default.fileExists(atPath: dir.appending(path: $0).path) }
     }
 
@@ -63,7 +76,11 @@ public actor ModelStore {
 
     /// Every completed `<org>/<name>` model under root.
     public func installed() -> [Installed] {
-        scan().filter { isInstalled($0.id) }
+        let local = scan().filter { isInstalled($0.id) }
+        let used = linked.keys.sorted().filter { isInstalled($0) }.map {
+            Installed(id: $0, directory: directory(for: $0), sizeBytes: Self.size(of: directory(for: $0)), linked: true)
+        }
+        return (local + used).sorted { $0.id < $1.id }
     }
 
     private func scan() -> [Installed] {
@@ -97,6 +114,7 @@ public actor ModelStore {
 
     public func remove(_ id: String) async throws {
         if residents.contains(id) { await unload(id) }
+        if linked[id] != nil { unregister(id); loaded[id] = nil; return }   // never delete the user's folder
         let dir = directory(for: id), fm = FileManager.default
         try fm.removeItem(at: dir)
         loaded[id] = nil
@@ -130,15 +148,6 @@ public actor ModelStore {
         if !residents.contains(id) { residents.append(id) }
         onResidentChange?(residents)
         return model
-    }
-
-    /// Context length declared by the model's config.json, capped at 32k.
-    public func contextLength(for id: String) -> Int {
-        let url = directory(for: id).appending(path: "config.json")
-        guard let data = try? Data(contentsOf: url), let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return 8192 }
-        let text = obj["text_config"] as? [String: Any] ?? obj
-        let n = (text["max_position_embeddings"] as? Int) ?? (obj["max_position_embeddings"] as? Int) ?? 8192
-        return min(n, 32_768)
     }
 
     /// Free one resident model's weights. The next use reloads from disk.
