@@ -12,9 +12,6 @@ that closed them rather than deleting them. Dates are when the item was added.
 - **Jev router validation** (2026-09-23): the request shape in `JevRouter` follows
   TypeSafe's published examples but has not run against a live key. Measure routing
   accuracy against the on-device router on real prompts once a key exists.
-- **Name check** (2026-09-22): "mlex" collides with MLex (mlex.com) and MLExchange
-  (github.com/mlexchange/mlex); one letter from Apple's MLX. Decide before anything public.
-
 ## Safety
 
 - **Secrets in tool output** (2026-09-24): the secret scanner checks what the user sends, not
@@ -42,7 +39,7 @@ that closed them rather than deleting them. Dates are when the item was added.
   `(deny default (with message …))` variant if it logs.
 - **Per-user temp is shared across sessions** (2026-09-23): swiftc and xcrun write to the
   per-user `DARWIN_USER_TEMP_DIR`/`CACHE_DIR` regardless of `$TMPDIR`, so those stay writable
-  (mode 700, but shared between mlex sessions). `/tmp` itself is closed.
+  (mode 700, but shared between emlex sessions). `/tmp` itself is closed.
 - **Proxy auth fallback** (2026-09-23): git sends no proxy credentials until challenged, so
   unauthenticated proxy requests use the most recently registered policy; with concurrent
   commands the attribution can be wrong. Issue a 407 challenge instead.
@@ -86,6 +83,9 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Done
 
+- **Name** (2026-09-24): renamed mlex → emlex, chosen for an available .ai domain. Old data
+  folders move on first run and leave symlinks; `MLEX_*` variables, `mlex-*` Keychain items and
+  per-project `.mlex/` folders still work.
 - **Laya as router or safety judge** (2026-09-24, evaluated, not adopted): on `evals/` the
   0.4B encoder is 15 to 20 times faster than the 3B judge but much less accurate. Routing 48%
   vs 81%, and it rarely predicts frontier. Safety: 22 unsafe allows vs 8 for the 3B, or 4
@@ -98,8 +98,8 @@ that closed them rather than deleting them. Dates are when the item was added.
   dogfood sessions made 15-step timelines hard to read (`6321928`).
 - Router escalation floor after a dogfood session sent a concurrency fix to Haiku (Opus review:
   under-routed): judgment cues raise to frontier, multi-step edits and code questions to cheap;
-  `mlex route -- "<prompt>"` shows decisions (`50ff930`).
-- In-page dialogs for session rename and worktree branch, implemented by mlex itself on Auto
+  `emlex route -- "<prompt>"` shows decisions (`50ff930`).
+- In-page dialogs for session rename and worktree branch, implemented by emlex itself on Auto
   (routed to Haiku, 15 tool calls, 25 s, no approvals needed; Opus review: appropriate) (`fe9a16d`).
 - Routing log per turn with outcome signals, `sessions routes`, Opus reviewer, badges in the app (`3d160da`).
 

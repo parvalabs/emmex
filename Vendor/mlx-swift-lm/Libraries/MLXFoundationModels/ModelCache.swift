@@ -259,7 +259,7 @@ actor ModelCache {
     /// synchronization is required — in-flight callers retain their own
     /// `ModelContainer` and free it via ARC on completion.
     func evictAll() {
-        PromptCacheRegistry.shared.removeAll()   // mlex patch
+        PromptCacheRegistry.shared.removeAll()   // emlex patch
         containers.removeAll()
         for loadTask in loadingTasks.values {
             loadTask.task.cancel()
@@ -281,7 +281,7 @@ actor ModelCache {
     /// cancellation stops early. The load-completion guard in `load()` is
     /// what prevents any superseded load from re-populating after removal.
     func remove(modelID: String) {
-        PromptCacheRegistry.shared.remove(modelID)   // mlex patch
+        PromptCacheRegistry.shared.remove(modelID)   // emlex patch
         // `loadingTasks` holds a `LoadTask` box; cancel the wrapped `Task`.
         loadingTasks[modelID]?.task.cancel()
         loadingTasks.removeValue(forKey: modelID)

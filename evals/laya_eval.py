@@ -1,7 +1,7 @@
 """Run Laya over the eval sets and write one JSON line per item and variant.
 
 Usage: evals/.venv/bin/python evals/laya_eval.py
-Weights: ~/.cache/mlex/classifiers/laya-mlx (aac6fef/laya-mlx, safetensors).
+Weights: ~/.cache/emlex/classifiers/laya-mlx (aac6fef/laya-mlx, safetensors).
 Tier and safety definitions are read from the Swift sources so the question text
 matches what the on-device classifiers and the Opus labels were given.
 """
@@ -12,7 +12,7 @@ import laya_mlx as laya
 
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent
-WEIGHTS = Path.home() / ".cache/mlex/classifiers/laya-mlx"
+WEIGHTS = Path.home() / ".cache/emlex/classifiers/laya-mlx"
 
 
 def swift_string(path, name):
@@ -22,8 +22,8 @@ def swift_string(path, name):
     return m.group(1)
 
 
-TIER = {t: swift_string("Sources/MlexCore/Router.swift", t) for t in ("local", "cheap", "frontier")}
-SAFE = {k: swift_string("Sources/MlexCore/Permissions.swift", f"{k}Means") for k in ("safe", "review", "dangerous")}
+TIER = {t: swift_string("Sources/EmlexCore/Router.swift", t) for t in ("local", "cheap", "frontier")}
+SAFE = {k: swift_string("Sources/EmlexCore/Permissions.swift", f"{k}Means") for k in ("safe", "review", "dangerous")}
 
 ROUTE_VARIANTS = {
     # Our tier definitions as one choice question.

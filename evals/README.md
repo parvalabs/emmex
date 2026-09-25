@@ -1,6 +1,6 @@
 # Classifier evals
 
-Offline accuracy and latency checks for the classifiers mlex runs on every turn: the router
+Offline accuracy and latency checks for the classifiers emlex runs on every turn: the router
 (local, cheap or frontier) and the smart-mode safety judge (safe, review or dangerous).
 
 - `data/routing.jsonl`: 94 requests, 12 of them short replies that depend on the previous turn.
@@ -8,13 +8,13 @@ Offline accuracy and latency checks for the classifiers mlex runs on every turn:
 - `data/secrets.jsonl` and `data/secrets-holdout.jsonl`: 56 and 24 messages for the secret
   scanner, hand-labelled. `{{name}}` placeholders expand to synthetic tokens at runtime
   (`EvalHarness.fixture`), so the repo holds nothing that looks like a live credential.
-  Run with `mlex eval secrets` (`--dir` for the held-out copy).
+  Run with `emlex eval secrets` (`--dir` for the held-out copy).
 - Routing and command labels come from Opus 5.5, given the same tier and safety definitions the classifiers get
   (`TierGuide` in `Router.swift`, `SafetyClassifier` in `Permissions.swift`).
 
 ```bash
-.build/debug/mlex eval label          # label items that have no label yet (Claude, Keychain key)
-.build/debug/mlex eval run            # on-device 3B router and safety judge
+.build/debug/emlex eval label          # label items that have no label yet (Claude, Keychain key)
+.build/debug/emlex eval run            # on-device 3B router and safety judge
 evals/.venv/bin/python evals/laya_eval.py   # Laya (see below)
 python3 evals/compare.py              # score everything in results/
 ```
@@ -35,4 +35,4 @@ through its Python package in a venv:
 evals/.venv/bin/pip install laya-mlx==0.2.0
 ```
 
-Weights go to `~/.cache/mlex/classifiers/laya-mlx`, outside the MLX chat model library.
+Weights go to `~/.cache/emlex/classifiers/laya-mlx`, outside the MLX chat model library.
