@@ -97,8 +97,12 @@ public actor ModelStore {
 
     public func remove(_ id: String) async throws {
         if residents.contains(id) { await unload(id) }
-        try FileManager.default.removeItem(at: directory(for: id))
+        let dir = directory(for: id), fm = FileManager.default
+        try fm.removeItem(at: dir)
         loaded[id] = nil
+        // Drop the organization folder too once its last model is gone.
+        let org = dir.deletingLastPathComponent()
+        if org.path != root.path, (try? fm.contentsOfDirectory(atPath: org.path))?.filter({ !$0.hasPrefix(".") }).isEmpty == true { try? fm.removeItem(at: org) }
     }
 
     /// A `LanguageModel` for an installed MLX model, with its weights loaded. Several models can

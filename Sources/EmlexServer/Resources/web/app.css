@@ -160,6 +160,9 @@ textarea::placeholder { color: var(--faint); }
 .dialog-btn:hover { background: var(--fill-2); }
 .dialog-btn.dialog-ok { background: var(--accent); color: var(--accent-fg); }
 .dialog-btn.dialog-ok:hover { background: var(--accent); opacity: 0.9; }
+.dialog-btn.dialog-danger { background: var(--err); color: #fff; }
+.dialog-btn.dialog-danger:hover { opacity: 0.9; }
+.modal-card p.small { margin: 0 0 14px; }
 .mrow { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; background: var(--surface); margin-bottom: 6px; }
 .mrow .dot2 { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); } .mrow .dot2.on { background: var(--ok); }
 .mrow .spec { font: 12px var(--mono); } .mrow .det { font-size: 11px; color: var(--muted); }

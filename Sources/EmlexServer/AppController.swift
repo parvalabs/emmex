@@ -151,7 +151,14 @@ public final class AppController {
         case "compact": compact()
         case "pull": if let id = str("id") { pull(id) }
         case "cancel_pull": if let id = str("id") { pullTasks[id]?.cancel() }
-        case "remove_model": if let id = str("id") { Task { try? await ModelStore.shared.remove(id); await refreshModels(); push() } }
+        case "remove_model":
+            if let id = str("id") {
+                Task {
+                    do { try await ModelStore.shared.remove(id); info("removed \(id)") }
+                    catch { self.error("could not remove \(id): \(error.localizedDescription)") }
+                    await refreshModels(); push()
+                }
+            }
         case "unload":
             let id = str("id")
             Task { if let id { await ModelStore.shared.unload(id) } else { await ModelStore.shared.unloadAll() }; await refreshModels(); push() }

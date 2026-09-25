@@ -9,6 +9,25 @@ async function act(a) {
   return r.json().catch(() => ({}));
 }
 
+/* In-page confirmation: WKWebView has no default UI for window.confirm, so native confirm()
+   returns false in the app and the action silently never runs. */
+function confirmDialog(title, message, okLabel = 'OK', danger = false) {
+  return new Promise((resolve) => {
+    const modal = el('div', 'modal'); const card = el('div', 'modal-card');
+    const h2 = el('h2', '', title); const p = el('p', 'small', message);
+    const buttons = el('div', 'dialog-buttons');
+    const cancelBtn = el('button', 'dialog-btn', 'Cancel');
+    const okBtn = el('button', 'dialog-btn ' + (danger ? 'dialog-danger' : 'dialog-ok'), okLabel);
+    buttons.append(cancelBtn, okBtn); card.append(h2, p, buttons); modal.append(card);
+    const close = (v) => { document.removeEventListener('keydown', onKey, true); modal.remove(); resolve(v); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(false); } else if (e.key === 'Enter') { e.preventDefault(); close(true); } };
+    document.addEventListener('keydown', onKey, true);
+    cancelBtn.onclick = () => close(false); okBtn.onclick = () => close(true);
+    modal.onclick = (e) => { if (e.target === modal) close(false); };
+    document.body.append(modal); okBtn.focus();
+  });
+}
+
 function dialog(title, defaultValue = '') {
   return new Promise((resolve) => {
     const modal = el('div', 'modal');
@@ -484,7 +503,7 @@ function openModels() {
       if (b.spec.startsWith('mlx:')) { const id = b.spec.slice(4);
         if (S.loading === id) r.append(el('span', 'small', 'loading…'));
         else if ((S.residents || []).some(x => x.id === id)) { const u = el('button', 'btn', 'Unload'); u.onclick = () => act({ type: 'unload', id }); r.append(u); }
-        const d = el('button', 'btn danger', 'Remove'); d.onclick = () => { if (confirm(`Delete ${id} from disk?`)) act({ type: 'remove_model', id }); }; r.append(d); }
+        const d = el('button', 'btn danger', 'Remove'); d.onclick = async () => { const size = b.detail ? ` (${b.detail})` : ''; if (await confirmDialog('Remove model?', `Delete ${id}${size} from disk. You can pull it again later.`, 'Remove', true)) act({ type: 'remove_model', id }); }; r.append(d); }
       c.append(r);
     }
     c.append(el('h3', '', 'Pull from Hugging Face'));
