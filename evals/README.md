@@ -1,5 +1,7 @@
 # Classifier evals
 
+Latest results and decisions: [RESULTS.md](RESULTS.md).
+
 Offline accuracy and latency checks for the classifiers emlex runs on every turn: the router
 (local, cheap or frontier) and the smart-mode safety judge (safe, review or dangerous).
 
