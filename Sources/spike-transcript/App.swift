@@ -2,7 +2,7 @@
 // (prune a tool output, inject a memory fact) and resume in a new session.
 import Foundation
 import FoundationModels
-import EmlexCore
+import EmmexCore
 
 func text(_ segs: [Transcript.Segment]) -> String {
     segs.compactMap { if case .text(let t) = $0 { t.content } else { nil } }.joined()
@@ -24,7 +24,7 @@ func describe(_ t: Transcript) {
 
 @main struct App {
     static func main() async {
-        let scratch = NSTemporaryDirectory() + "emlex-spike-\(UUID().uuidString.prefix(6))"
+        let scratch = NSTemporaryDirectory() + "emmex-spike-\(UUID().uuidString.prefix(6))"
         try! FileManager.default.createDirectory(atPath: scratch, withIntermediateDirectories: true)
         for n in ["alpha.txt", "beta.txt", "gamma.txt"] {
             FileManager.default.createFile(atPath: scratch + "/" + n, contents: Data("x".utf8))
@@ -40,7 +40,7 @@ func describe(_ t: Transcript) {
             var entries: [Transcript.Entry] = []
             for e in s1.transcript {
                 if case .toolOutput(let o) = e {
-                    entries.append(.toolOutput(.init(id: o.id, toolName: o.toolName, segments: [.text(.init(content: "[output pruned by emlex]"))])))
+                    entries.append(.toolOutput(.init(id: o.id, toolName: o.toolName, segments: [.text(.init(content: "[output pruned by emmex]"))])))
                 } else { entries.append(e) }
             }
             entries.append(.prompt(.init(segments: [.text(.init(content: "Memory note: the project codename is PELICAN."))])))

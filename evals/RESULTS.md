@@ -18,7 +18,7 @@ file in the same commit as any change that moves these numbers.
 
 ## What was tested
 
-| Classifier | Job | In emlex today | Candidates |
+| Classifier | Job | In emmex today | Candidates |
 | --- | --- | --- | --- |
 | Router | Pick local, cheap or frontier for each message in auto mode | On-device 3B, guided generation, plus deterministic floor rules | Laya with our tier definitions; Laya's own routing preset |
 | Safety judge | Decide if a shell command may run unasked in smart mode | Deterministic rules first, then the 3B model in the gray zone | Laya with one safe/review/dangerous question; Laya with four yes/no questions |

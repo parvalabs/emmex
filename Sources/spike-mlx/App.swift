@@ -1,5 +1,5 @@
 // Spike 3: can an 8B open model through the MLX bridge handle a routine git task with tools?
-// Weights are pre-downloaded into ~/.cache/emlex/models/<org>/<name> (plain HF file layout).
+// Weights are pre-downloaded into ~/.cache/emmex/models/<org>/<name> (plain HF file layout).
 import Foundation
 import FoundationModels
 import MLXFoundationModels
@@ -8,17 +8,17 @@ import MLXLMCommon
 import MLXLLM
 import HuggingFace
 import Tokenizers
-import EmlexCore
+import EmmexCore
 
 @main struct App {
     static func main() async {
         let env = ProcessInfo.processInfo.environment
-        let modelID = Env.value("EMLEX_MLX_MODEL") ?? "mlx-community/Qwen3-8B-4bit"
+        let modelID = Env.value("EMMEX_MLX_MODEL") ?? "mlx-community/Qwen3-8B-4bit"
         let modelsRoot = Paths.cacheRoot.appending(path: "models")
         let modelDir = modelsRoot.appending(path: modelID)
 
         // Scratch git repo with a feature branch behind main and an uncommitted change.
-        let scratch = NSTemporaryDirectory() + "emlex-git-\(UUID().uuidString.prefix(6))"
+        let scratch = NSTemporaryDirectory() + "emmex-git-\(UUID().uuidString.prefix(6))"
         let setup = """
         set -e; mkdir -p \(scratch); cd \(scratch); git init -q -b main; git config user.email t@t; git config user.name t
         echo a > a.txt; git add .; git commit -qm 'init'
@@ -34,14 +34,14 @@ import EmlexCore
             let t0 = Date()
             let model = MLXLanguageModel(
                 configuration: ModelConfiguration(directory: modelDir),
-                capabilities: Env.value("EMLEX_REASONING") == "0" ? [.guidedGeneration, .toolCalling] : [.guidedGeneration, .toolCalling, .reasoning],
+                capabilities: Env.value("EMMEX_REASONING") == "0" ? [.guidedGeneration, .toolCalling] : [.guidedGeneration, .toolCalling, .reasoning],
                 weightsLocation: { _ in modelDir },
                 load: { _, _ in
                     try await loadModelContainer(from: modelDir, using: #huggingFaceTokenizerLoader())
                 })
             _ = try await LanguageModelSession(model: model).respond(to: "Say ok.", options: GenerationOptions(maximumResponseTokens: 4))
             print("model load + warmup: \(Int(Date().timeIntervalSince(t0)))s")
-            if Env.value("EMLEX_MODE") == "bench" {
+            if Env.value("EMMEX_MODE") == "bench" {
                 func bench(_ label: String, tools: [any FoundationModels.Tool], reasoning: ContextOptions.ReasoningLevel? = nil) async throws {
                     let s = LanguageModelSession(model: model, tools: tools, instructions: "You are a helpful assistant.")
                     let t = Date()

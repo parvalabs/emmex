@@ -1197,7 +1197,7 @@ public struct MLXLanguageModel: FoundationModels.LanguageModel, Sendable {
             var completionInfo: GenerateCompletionInfo?
             var reasoningTokenCount = 0
             var endedInsideReasoning = false
-            var cachedPromptTokens = 0      // emlex patch: prefix served from the prompt cache
+            var cachedPromptTokens = 0      // emmex patch: prefix served from the prompt cache
         }
 
         private func runAllowedToolGeneration(
@@ -1226,7 +1226,7 @@ public struct MLXLanguageModel: FoundationModels.LanguageModel, Sendable {
                 stopStrings: context.configuration.effectiveStopStrings)
             var detokenizer = NaiveStreamingDetokenizer(tokenizer: context.tokenizer)
             var result = AllowedToolGenerationResult()
-            // emlex patch: reuse the cached prefix, feed only the new tail.
+            // emmex patch: reuse the cached prefix, feed only the new tail.
             let reuse = try PromptCacheReuse.prepare(
                 modelID: context.configuration.name, input: input, model: context.model, parameters: params)
             result.cachedPromptTokens = reuse.cachedCount
@@ -1510,7 +1510,7 @@ public struct MLXLanguageModel: FoundationModels.LanguageModel, Sendable {
                 samplingConfiguration: samplingConfiguration
             )
 
-            // emlex patch: reuse the cached prefix, feed only the new tail. Text chunks carry no
+            // emmex patch: reuse the cached prefix, feed only the new tail. Text chunks carry no
             // token ids, so the ledger stops at the prompt and the answer is re-prefilled next turn.
             let reuse = try PromptCacheReuse.prepare(
                 modelID: context.configuration.name, input: input, model: context.model, parameters: params)
@@ -1620,7 +1620,7 @@ public struct MLXLanguageModel: FoundationModels.LanguageModel, Sendable {
             var detokenizer = NaiveStreamingDetokenizer(tokenizer: context.tokenizer)
             var reasoningTokenCount = 0
             var completionInfo: GenerateCompletionInfo?
-            // emlex patch: reuse the cached prefix, feed only the new tail.
+            // emmex patch: reuse the cached prefix, feed only the new tail.
             let reuse = try PromptCacheReuse.prepare(
                 modelID: context.configuration.name, input: input, model: context.model, parameters: params)
             var generatedTokens: [Int] = []

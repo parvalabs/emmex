@@ -1,5 +1,5 @@
-// emlex patch: keep the KV cache between requests so a growing transcript only
-// prefills its new tail. See EMLEX-PATCHES.md at the package root.
+// emmex patch: keep the KV cache between requests so a growing transcript only
+// prefills its new tail. See EMMEX-PATCHES.md at the package root.
 
 #if FoundationModelsIntegration
 #if canImport(FoundationModels, _version: 2)
@@ -21,10 +21,10 @@ final class PromptCacheRegistry: @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [String: PromptCacheEntry] = [:]
 
-    /// `EMLEX_MLX_PROMPT_CACHE=0` (or the pre-rename `MLEX_MLX_PROMPT_CACHE=0`) turns reuse off (every request prefills everything).
+    /// `EMMEX_MLX_PROMPT_CACHE=0` (or the pre-rename `EMLEX_`/`MLEX_` spelling) turns reuse off (every request prefills everything).
     static let enabled: Bool = {
         let env = ProcessInfo.processInfo.environment
-        return (env["EMLEX_MLX_PROMPT_CACHE"] ?? env["MLEX_MLX_PROMPT_CACHE"]) != "0"
+        return (env["EMMEX_MLX_PROMPT_CACHE"] ?? env["EMLEX_MLX_PROMPT_CACHE"] ?? env["MLEX_MLX_PROMPT_CACHE"]) != "0"
     }()
 
     func entry(for modelID: String) -> PromptCacheEntry {

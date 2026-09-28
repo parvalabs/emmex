@@ -1,4 +1,4 @@
-# emlex feasibility spikes
+# emmex feasibility spikes
 
 Goal: a Swift agent harness on Apple's FoundationModels framework (macOS 27) that routes
 each turn between the on-device model, an open local model, Private Cloud Compute, and
@@ -32,7 +32,7 @@ Conclusion: the adapter uses prompt caching and reports it through
 ## Spike 3, open local model via MLX: PASS with caveats (2026-09-22)
 
 `Sources/spike-mlx`, mlx-swift-lm `main` (MLXFoundationModels bridge), Qwen3-8B-4bit loaded
-from `~/.cache/emlex/models/mlx-community/Qwen3-8B-4bit` via `ModelConfiguration(directory:)`.
+from `~/.cache/emmex/models/mlx-community/Qwen3-8B-4bit` via `ModelConfiguration(directory:)`.
 Task: in a scratch repo, rebase `feature` onto `main` and commit an untracked file, with only
 the `bash` tool. Ground truth checked with `git log` afterwards.
 
@@ -70,12 +70,12 @@ Conclusions:
   `#huggingFaceTokenizerLoader()` macro to expand.
 - mlx-swift needs the Metal Toolchain: `xcodebuild -downloadComponent MetalToolchain` after
   `sudo xcodebuild -runFirstLaunch`.
-- Anthropic API key lives in the macOS Keychain under service `emlex-anthropic`:
-  `ANTHROPIC_API_KEY=$(security find-generic-password -s emlex-anthropic -w)`.
+- Anthropic API key lives in the macOS Keychain under service `emmex-anthropic`:
+  `ANTHROPIC_API_KEY=$(security find-generic-password -s emmex-anthropic -w)`.
 
 ## Headless core + CLI (2026-09-22)
 
-`EmlexCore` and the `emlex` CLI exist and were exercised against a scratch project:
+`EmmexCore` and the `emmex` CLI exist and were exercised against a scratch project:
 
 | backend | task | outcome |
 |---|---|---|
@@ -90,5 +90,5 @@ Private Cloud Compute needs the managed entitlement `com.apple.developer.private
 on a signed app, granted by Apple on request. A Swift Package executable cannot carry it, and
 the framework reports PCC as available anyway before the request fails. The CLI now reads its
 own entitlements and reports the tier as unavailable. The shipped `fm` CLI (27.0) also only
-accepts `--model system`. Consequence: the PCC tier only becomes real once emlex is a signed
+accepts `--model system`. Consequence: the PCC tier only becomes real once emmex is a signed
 app with that entitlement, so the SwiftUI app is where it gets tested.

@@ -39,7 +39,7 @@ that closed them rather than deleting them. Dates are when the item was added.
   `(deny default (with message …))` variant if it logs.
 - **Per-user temp is shared across sessions** (2026-09-23): swiftc and xcrun write to the
   per-user `DARWIN_USER_TEMP_DIR`/`CACHE_DIR` regardless of `$TMPDIR`, so those stay writable
-  (mode 700, but shared between emlex sessions). `/tmp` itself is closed.
+  (mode 700, but shared between emmex sessions). `/tmp` itself is closed.
 - **Proxy auth fallback** (2026-09-23): git sends no proxy credentials until challenged, so
   unauthenticated proxy requests use the most recently registered policy; with concurrent
   commands the attribution can be wrong. Issue a 407 challenge instead.
@@ -87,6 +87,9 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Done
 
+- **Name** (2026-09-27): renamed emlex → emmex, with emmex.ai registered. Folders move on first
+  run and leave symlinks, so mlex → emlex → emmex resolves as a chain; `EMLEX_*`/`MLEX_*`
+  variables, `emlex-*`/`mlex-*` Keychain items and `.emlex/`/`.mlex/` project folders still work.
 - **Name** (2026-09-24): renamed mlex → emlex, chosen for an available .ai domain. Old data
   folders move on first run and leave symlinks; `MLEX_*` variables, `mlex-*` Keychain items and
   per-project `.mlex/` folders still work.
@@ -102,8 +105,8 @@ that closed them rather than deleting them. Dates are when the item was added.
   dogfood sessions made 15-step timelines hard to read (`6321928`).
 - Router escalation floor after a dogfood session sent a concurrency fix to Haiku (Opus review:
   under-routed): judgment cues raise to frontier, multi-step edits and code questions to cheap;
-  `emlex route -- "<prompt>"` shows decisions (`50ff930`).
-- In-page dialogs for session rename and worktree branch, implemented by emlex itself on Auto
+  `emmex route -- "<prompt>"` shows decisions (`50ff930`).
+- In-page dialogs for session rename and worktree branch, implemented by emmex itself on Auto
   (routed to Haiku, 15 tool calls, 25 s, no approvals needed; Opus review: appropriate) (`fe9a16d`).
 - Routing log per turn with outcome signals, `sessions routes`, Opus reviewer, badges in the app (`3d160da`).
 

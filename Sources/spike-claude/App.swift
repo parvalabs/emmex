@@ -2,7 +2,7 @@
 import Foundation
 import FoundationModels
 import ClaudeForFoundationModels
-import EmlexCore
+import EmmexCore
 
 @main struct App {
 static func main() async {
@@ -14,7 +14,7 @@ static func main() async {
     // Long instructions so a cache would be worth creating (Anthropic caches >= 1024 tokens on Sonnet).
     let filler = (1...60).map { "Rule \($0): Always be precise, terse and correct when answering about repository state." }.joined(separator: " ")
     let session = LanguageModelSession(model: model, tools: [BashTool(ToolContext(cwd: cwd, report: { ev in if case .toolCall(_, let a) = ev { print("  [tool] $ \(a)") } else if case .toolResult(_, let o) = ev { print("  [tool] \(o.replacingOccurrences(of: "\n", with: "⏎").prefix(160))") } }))],
-                                       instructions: "You are emlex, a coding agent. \(filler)")
+                                       instructions: "You are emmex, a coding agent. \(filler)")
     
     func turn(_ p: String) async throws {
         let t0 = Date()
