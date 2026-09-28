@@ -31,6 +31,10 @@ public final class AppController {
     // Model + effort
     var selected: ModelSpec = .system
     var pendingSpec: ModelSpec?  // spec to apply after current load completes
+    /// A session whose MLX model is not loaded: shown, but not started until the model is loaded
+    /// or another model is picked.
+    var parkedRecord: SessionRecord?
+    var modelNeeded: String?
     var effort: Effort = .default
     var backends: [Backends.Status] = []
     var modelInfos: [[String: Any]] = []
@@ -59,7 +63,7 @@ public final class AppController {
     var memory: [MemoryFact] = []
     var generation = 0
 
-    public init() {}
+    public init() { AgentSession.loadsModelsOnDemand = false }   // only the Models view loads MLX models
 
     // MARK: snapshot
 
@@ -74,6 +78,8 @@ public final class AppController {
             "selected": selected.description, "effort": effort.rawValue,
             "backends": backends.map { ["spec": $0.spec, "available": $0.available, "detail": $0.detail] },
             "loading": loadingID as Any, "resident": residentID as Any, "residents": residents,
+            "modelNeeded": modelNeeded as Any,
+            "parked": parkedRecord.map { ["id": $0.id, "title": $0.title] } as Any,
             "models": modelInfos, "backendContext": backendContext,
             "memTotal": SystemMemory.total, "memFree": SystemMemory.available(),
             "footprint": SystemMemory.format(footprint), "free": SystemMemory.format(SystemMemory.available()),
@@ -222,9 +228,12 @@ public final class AppController {
                     await refreshModels(); push()
                 }
             }
+        case "load_model":
+            guard let id = str("id") else { break }
+            loadModel(id)
         case "unload":
             let id = str("id")
-            Task { if let id { await ModelStore.shared.unload(id) } else { await ModelStore.shared.unloadAll() }; await refreshModels(); push() }
+            Task { if let id { await ModelStore.shared.unload(id) } else { await ModelStore.shared.unloadAll() }; await parkIfModelGone(); await refreshModels(); push() }
         case "forget": if let id = str("id"), let ws = workspace { Task { try? await MemoryStore.shared.remove(id, workspace: ws); await refreshMemory(); push() } }
         case "clear_memory": if let ws = workspace { Task { try? await MemoryStore.shared.clear(workspace: ws); await refreshMemory(); push() } }
         case "restore_fact": if let id = str("id"), let ws = workspace { Task { try? await MemoryStore.shared.restore(id, workspace: ws); await refreshMemory(); push() } }
@@ -307,10 +316,23 @@ public final class AppController {
 
     // MARK: sessions
 
+    func isLoaded(_ spec: ModelSpec) async -> Bool {
+        guard case .mlx(let id) = spec else { return true }
+        return await ModelStore.shared.residents.contains(id)
+    }
+
+    /// Keep a session on screen without starting it, because its MLX model is not loaded.
+    func park(_ record: SessionRecord, needing id: String) {
+        generation += 1
+        parkedRecord = record; modelNeeded = id; current = nil; loadingID = nil; busy = false; push()
+    }
+    func unpark() { parkedRecord = nil; modelNeeded = nil }
+
     func newSession(worktree: String? = nil) {
         guard let ws = workspace else { return }
-        timeline = []; lastUsage = nil; current = nil; push()
+        timeline = []; lastUsage = nil; current = nil; unpark(); push()
         Task {
+            if !(await isLoaded(selected)) { info("\(selected) isn't loaded, so this session uses auto. Load models from Models."); selected = .auto }
             var cwd = ws
             if let worktree, !worktree.isEmpty {
                 do { let w = try Worktrees.add(repo: ws, branch: worktree); cwd = URL(fileURLWithPath: w.path); info("worktree \(worktree) at \(w.path)") }
@@ -324,16 +346,66 @@ public final class AppController {
         guard let ws = workspace, current?.record.id != id, let record = try? SessionStore.load(id, workspace: ws) else { return }
         timeline = []; lastUsage = nil; current = nil
         selected = record.spec; effort = record.effort; mode = record.mode; permission = record.permission
-        replay(Compactor.sanitized(record.transcript)); push()
-        Task { await load { try await AgentSession(record: record, spec: nil, mcp: self.mcp, approver: self.approver, sink: self.sink) } }
+        unpark(); replay(Compactor.sanitized(record.transcript)); push()
+        Task {
+            if case .mlx(let id) = record.spec, !(await isLoaded(record.spec)) { park(record, needing: id); return }
+            await load { try await AgentSession(record: record, spec: nil, mcp: self.mcp, approver: self.approver, sink: self.sink) }
+        }
     }
 
     func select(_ spec: ModelSpec) {
+        Task {
+            guard await isLoaded(spec) else { info("\(spec) isn't loaded. Load it from Models first."); push(); return }
+            if let record = parkedRecord {           // continue a parked session on the chosen model
+                selected = spec; unpark(); push()
+                await load { try await AgentSession(record: record, spec: spec, mcp: self.mcp, approver: self.approver, sink: self.sink) }
+                return
+            }
+            selectLoaded(spec)
+        }
+    }
+
+    private func selectLoaded(_ spec: ModelSpec) {
         guard spec != selected else { return }
         selected = spec
         guard let cur = current else { pendingSpec = spec; push(); return }
         try? cur.save(); current = nil; push()
         Task { await load { try await AgentSession(record: cur.record, spec: spec, mcp: self.mcp, approver: self.approver, sink: self.sink) } }
+    }
+
+    /// The only way the app loads an MLX model: an explicit request from the Models view.
+    func loadModel(_ id: String) {
+        guard loadingID == nil else { info("\(loadingID!) is still loading"); return }
+        loadingID = id; push()
+        Task {
+            let before = await ModelStore.shared.residents
+            let (needed, available) = await ModelStore.shared.headroom(for: id)
+            if needed > 0, needed > available { warn("\(id) needs about \(SystemMemory.format(needed)) but only \(SystemMemory.format(available)) is free; expect swapping") }
+            do {
+                _ = try await ModelStore.shared.languageModel(for: id)
+                let after = await ModelStore.shared.residents
+                let evicted = before.filter { !after.contains($0) }
+                info("loaded \(id)" + (evicted.isEmpty ? "" : "; unloaded \(evicted.joined(separator: ", ")) to make room"))
+            } catch { self.error("could not load \(id): \(error)") }
+            loadingID = nil
+            await parkIfModelGone()
+            await refreshModels(); push()
+            // A session waiting for this model continues now.
+            if modelNeeded == id, let record = parkedRecord {
+                unpark(); selected = record.spec; push()
+                await load { try await AgentSession(record: record, spec: nil, mcp: self.mcp, approver: self.approver, sink: self.sink) }
+            }
+        }
+    }
+
+    /// If the running session's MLX model was unloaded (by the user or to make room), stop it
+    /// before its next message would silently load the weights again.
+    func parkIfModelGone() async {
+        guard let cur = current, case .mlx(let id) = cur.effectiveSpec, !(await ModelStore.shared.residents.contains(id)) else { return }
+        if busy { return }                       // let a running turn finish; the next send re-checks
+        try? cur.save()
+        park(cur.record, needing: id)
+        info("\(id) was unloaded; load it again or pick another model to continue this session")
     }
 
     func rename(_ id: String, to title: String) {
@@ -437,6 +509,7 @@ public final class AppController {
         let raw = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else { return }
         if busy, current != nil { queue.append(raw); if !checked { uncheckedQueue.insert(raw) }; push(); return }
+        if let id = modelNeeded, current == nil { info("\(id) isn't loaded. Load it from Models or pick another model, then send again."); return }
         guard let cur = current else { if workspace != nil { pending = raw; busy = true; push() }; return }
         if raw == "/compact" { compact(); return }
         if raw == "/new" { newSession(); return }
@@ -497,6 +570,7 @@ public final class AppController {
 
     private func append(_ item: Item) { timeline.append(item); emit("append", item.json) }
     private func info(_ s: String) { append(.init(id: UUID().uuidString, kind: "info", title: "", text: s, userTurn: nil)) }
+    private func warn(_ s: String) { append(.init(id: UUID().uuidString, kind: "warning", title: "", text: s, userTurn: nil)) }
     private func error(_ s: String) { append(.init(id: UUID().uuidString, kind: "error", title: "", text: s, userTurn: nil)) }
 
     // MARK: models

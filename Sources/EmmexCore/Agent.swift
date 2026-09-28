@@ -79,7 +79,7 @@ public final class AgentSession: @unchecked Sendable {
         let box = CounterBox()
         self.counters = box
         self.sink = { ev in box.note(ev); sink(ev) }
-        self.activeSpec = spec == .auto ? await TierResolver.current().spec(for: .local) : spec
+        self.activeSpec = spec == .auto ? await Self.usableSpec(for: .local).0 : spec
         let policy = record.mode == .code ? PolicyEngine(workspace: record.workspaceURL, cwd: record.cwdURL, level: record.permission) : nil
         self.policy = policy
         let ctx = ToolContext(cwd: record.cwd, report: self.sink, policy: policy, approver: approver, sessionID: record.id)
@@ -143,6 +143,25 @@ public final class AgentSession: @unchecked Sendable {
     public var effectiveSpec: ModelSpec { spec == .auto ? activeSpec : spec }
 
     /// Route the prompt and switch the live session to the chosen tier if needed.
+    /// Whether a session may load an MLX model that is not in memory yet. The CLI keeps this on
+    /// (naming a model is the request); the app turns it off so only the Models view loads models.
+    nonisolated(unsafe) public static var loadsModelsOnDemand = true
+
+    /// The spec for `tier`, skipping MLX models that are not loaded when on-demand loading is off:
+    /// the next tier up is tried, then the on-device model.
+    static func usableSpec(for tier: Tier) async -> (ModelSpec, String?) {
+        let resolver = await TierResolver.current()
+        let wanted = resolver.spec(for: tier)
+        guard !loadsModelsOnDemand else { return (wanted, nil) }
+        let order: [Tier] = [.local, .cheap, .frontier]
+        for t in order.drop(while: { $0 != tier }) {
+            let spec = resolver.spec(for: t)
+            if case .mlx(let id) = spec, !(await ModelStore.shared.residents.contains(id)) { continue }
+            return (spec, spec == wanted ? nil : "\(wanted) isn't loaded")
+        }
+        return (.system, "\(wanted) isn't loaded")
+    }
+
     func routeIfAuto(_ prompt: String) async {
         guard spec == .auto else { return }
         let recent = session.transcript.suffix(4).map(Compactor.render).joined(separator: "\n").suffix(600)
@@ -155,8 +174,8 @@ public final class AgentSession: @unchecked Sendable {
                 decision = try await router.route(.init(prompt: prompt, recent: String(recent), tools: toolNames))
             }
             lastRoute = decision
-            let resolver = await TierResolver.current()
-            let target = resolver.spec(for: decision.tier)
+            let (target, skipped) = await Self.usableSpec(for: decision.tier)
+            if let skipped { sink(.info("\(skipped); using \(target) instead")) }
             if target != activeSpec {
                 try await rebuild(with: session.transcript, spec: target)
                 activeSpec = target

@@ -310,3 +310,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { 
 .mv-choice .d { color: var(--muted); font-size: 11.5px; display: block; }
 .mv-path .btn { font: 12px var(--font); white-space: nowrap; }
 .mv-actions .btn:disabled { background: var(--fill); color: var(--muted); cursor: default; }
+.menu .item.disabled { color: var(--faint); cursor: default; } .menu .item.disabled:hover { background: none; }
+.menu .tag.off { color: var(--faint); }
+.approval.needed { border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.approval.needed .head .tool { color: var(--accent); }

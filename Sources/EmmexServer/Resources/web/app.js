@@ -322,7 +322,8 @@ function renderSessions() {
   for (const b of ['Today', 'Yesterday', 'Previous 7 days', 'Older']) {
     if (!groups[b]) continue; box.append(el('div', 'sec', b));
     for (const s of groups[b]) {
-      const r = el('div', 'sess' + (S.current && S.current.id === s.id ? ' active' : '')); r.append(el('span', 't', s.title));
+      const shown = S.current || S.parked;
+      const r = el('div', 'sess' + (shown && shown.id === s.id ? ' active' : '')); r.append(el('span', 't', s.title));
       if (s.worktree) r.append(el('span', 'wt', '⑂'));
       r.title = `${s.model} · ${s.turns} turns`; r.onclick = () => act({ type: 'resume', id: s.id });
       r.oncontextmenu = (ev) => { ev.preventDefault(); menu(ev.clientX, ev.clientY, [
@@ -356,7 +357,7 @@ function renderLoaded() {
 function renderChrome() {
   renderLoaded();
   $('#ws-name').textContent = S.workspace ? S.workspace.name : 'Open a folder';
-  $('#title').textContent = S.current ? S.current.title : 'emmex';
+  $('#title').textContent = S.current ? S.current.title : S.parked ? S.parked.title : 'emmex';
   const wt = $('#worktree'); if (S.current && S.current.worktree) { wt.textContent = '⑂ ' + S.current.worktree; wt.classList.remove('hidden'); } else wt.classList.add('hidden');
   const ctx = $('#context');
   if (S.current && S.current.contextSize > 0) { const f = Math.min(1, S.current.contextUsed / S.current.contextSize);
@@ -371,7 +372,8 @@ function renderChrome() {
   $('#perm-btn').classList.toggle('hidden', S.mode === 'chat');
   renderApprovals();
   $('#mem').textContent = S.footprint;
-  const inp = $('#input'); inp.placeholder = !S.current ? 'Choose a folder to start' : S.busy ? 'Type a follow-up; it is sent when this turn finishes' : 'How can I help?  Type / for skills and templates';
+  renderModelNeeded();
+  const inp = $('#input'); inp.placeholder = S.modelNeeded ? 'Load the model or pick another one to continue' : !S.current ? 'Choose a folder to start' : S.busy ? 'Type a follow-up; it is sent when this turn finishes' : 'How can I help?  Type / for skills and templates';
   const q = $('#queue'); q.innerHTML = ''; if (S.queue.length) { q.classList.remove('hidden'); q.append(el('span', '', '⇥'));
     S.queue.forEach(t => q.append(el('span', 'q', t))); const c = el('button', 'btn', 'Clear'); c.onclick = () => act({ type: 'clear_queue' }); q.append(c); } else q.classList.add('hidden');
   updateSend();
@@ -390,6 +392,15 @@ function renderApprovals() {
     acts.append(deny); if (r.command) acts.append(always); acts.append(allow); c.append(acts); box.append(c);
   }
 }
+function renderModelNeeded() {
+  let box = $('#model-needed'); if (!box) { box = el('div'); box.id = 'model-needed'; $('#approvals').before(box); }
+  box.innerHTML = ''; if (!S.modelNeeded) return;
+  const c = el('div', 'approval needed');
+  const h = el('div', 'head'); h.append(el('span', 'tool', '◌ Model not loaded')); c.append(h);
+  c.append(el('div', 'why', `This session uses ${shortModel(S.modelNeeded)}, which isn't in memory. Load it from Models to continue, or pick another model below.`));
+  const acts = el('div', 'acts'); const open = el('button', 'btn primary', 'Open Models');
+  open.onclick = () => { mvSelected = 'mlx:' + S.modelNeeded; openModels(); }; acts.append(open); c.append(acts); box.append(c);
+}
 function updateSend() { $('#send').disabled = !$('#input').value.trim() || !S || !S.current; }
 
 /* ---------- menus ---------- */
@@ -398,10 +409,11 @@ function menu(x, y, entries) {
   for (const e of entries) {
     if (e.sep) { m.append(el('hr')); continue; }
     if (e.section) { m.append(el('div', 'sec', e.section)); continue; }
-    const it = el('div', 'item' + (e.on ? ' on' : '') + (e.danger ? ' danger' : ''), e.label);
+    const it = el('div', 'item' + (e.on ? ' on' : '') + (e.danger ? ' danger' : '') + (e.disabled ? ' disabled' : ''), e.label);
     if (e.sub) it.append(el('span', 'sub', e.sub));
-    if (e.tag) it.append(el('span', 'tag' + (e.tag.startsWith('loading') ? ' loading' : ''), e.tag));
-    it.onclick = () => { m.classList.add('hidden'); e.run(); }; m.append(it);
+    if (e.tag) it.append(el('span', 'tag' + (e.tag.startsWith('loading') ? ' loading' : e.disabled ? ' off' : ''), e.tag));
+    if (e.title) it.title = e.title;
+    it.onclick = () => { if (e.disabled) return; m.classList.add('hidden'); e.run(); }; m.append(it);
   }
   const r = m.getBoundingClientRect();
   m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px'; m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
@@ -417,11 +429,14 @@ $('#model-btn').onclick = (ev) => { ev.stopPropagation();
   const grp = (t, f) => { const l = specs.filter(f).sort((a, b) => isLoaded(b) - isLoaded(a)); if (l.length) { entries.push({ section: t }); l.forEach(s => entries.push(mi(s))); } };
   grp('Apple', s => s === 'system' || s === 'pcc'); grp('Claude', s => s.startsWith('claude:')); grp('Local MLX', s => s.startsWith('mlx:'));
   grp('Providers', s => !['system', 'pcc'].includes(s) && !s.startsWith('claude:') && !s.startsWith('mlx:') && !s.endsWith(':<model>'));
-  entries.push({ sep: true }, { label: 'Manage models…', run: openModels });
+  entries.push({ sep: true }, { label: 'Load or manage models…', run: openModels });
   anchorMenu($('#model-btn'), entries);
   function mi(s) { const id = s.startsWith('mlx:') ? s.slice(4) : null;
-    const tag = id && S.loading === id ? 'loading…' : id && (S.residents || []).some(r => r.id === id) ? 'loaded' : null;
-    return { label: s, on: S.selected === s, tag, run: () => act({ type: 'select_model', spec: s }) }; } };
+    const loaded = id && (S.residents || []).some(r => r.id === id);
+    const tag = id && S.loading === id ? 'loading…' : loaded ? 'loaded' : id ? 'not loaded' : null;
+    // Local models are loaded only from the Models view; until then they can't be picked here.
+    const disabled = !!id && !loaded;
+    return { label: s, on: S.selected === s, tag, disabled, title: disabled ? 'Load it from Models first' : '', run: () => act({ type: 'select_model', spec: s }) }; } };
 $('#effort-btn').onclick = (ev) => { ev.stopPropagation(); anchorMenu($('#effort-btn'), ['off', 'low', 'medium', 'high'].map(e => ({ label: e[0].toUpperCase() + e.slice(1), on: S.effort === e, run: () => act({ type: 'set_effort', effort: e }) }))); };
 $('#workspace').onclick = (ev) => { ev.stopPropagation(); const r = $('#workspace').getBoundingClientRect();
   const entries = S.recents.map(w => ({ label: w.name, on: S.workspace && S.workspace.path === w.path, sub: w.path.replace(/^\/Users\/[^/]+/, '~'), run: () => act({ type: 'open_workspace', path: w.path }) }));
@@ -545,9 +560,18 @@ function contextOptions(max) {
 function renderModelDetail() {
   const box = $('#mv-detail'); box.innerHTML = ''; const inner = el('div', 'inner'); box.append(inner);
   const spec = mvSelected; if (!spec) { inner.append(el('div', 'mv-empty', 'Select a model.')); return; }
-  const inUse = S.current && (S.selected === spec || S.current.effectiveModel === spec);
+  const inUse = (S.current || S.modelNeeded) && (S.selected === spec || (S.current && S.current.effectiveModel === spec));
   const acts = el('div', 'mv-actions');
-  const use = el('button', 'btn primary', inUse ? 'Used by this session' : 'Use in this session'); use.disabled = inUse || !S.current;
+  const mlxId = spec.startsWith('mlx:') ? spec.slice(4) : null;
+  const isLoaded = !mlxId || (S.residents || []).some(r => r.id === mlxId);
+  if (mlxId && !isLoaded) {
+    const ld = el('button', 'btn primary', S.loading === mlxId ? 'Loading…' : 'Load model');
+    ld.disabled = !!S.loading; ld.title = S.loading && S.loading !== mlxId ? `${shortModel(S.loading)} is loading` : 'Load the weights into memory so sessions can use this model';
+    ld.onclick = () => act({ type: 'load_model', id: mlxId }); acts.append(ld);
+  }
+  const use = el('button', 'btn' + (isLoaded ? ' primary' : ''), inUse && isLoaded && S.current ? 'Used by this session' : 'Use in this session');
+  use.disabled = !isLoaded || (inUse && !!S.current) || (!S.current && !S.modelNeeded);
+  if (!isLoaded) use.title = 'Load it first';
   use.onclick = () => act({ type: 'select_model', spec }); acts.append(use);
   if (!spec.startsWith('mlx:')) {
     const b = S.backends.find(x => x.spec === spec) || { detail: '' };

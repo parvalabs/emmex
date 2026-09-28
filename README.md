@@ -77,7 +77,7 @@ See `docs/FEASIBILITY.md` for the spike results that shaped the design.
   commands get `--disable-sandbox` because macOS refuses nested sandboxes. `emmex sandbox --
   "<cmd>"` runs a command under the profile for testing. Disable with `"sandbox": false`.
 - **Effort** per message: `off | low | medium | high` (Claude effort, MLX thinking on/off).
-- **Memory-aware model loading**: one MLX model resident at a time, with headroom warnings.
+- **Explicit model loading**: MLX models load only from the Models view; several can stay loaded, with headroom warnings.
 
 ## CLI
 
@@ -118,11 +118,13 @@ MLX weights live in `~/.cache/emmex/models/<org>/<name>`. Set `EMMEX_USAGE=1` to
 
 ## Memory
 
-Pulling a model only writes to disk. Weights load when a model is selected and stay resident
-until you select another MLX model, which evicts the previous one, or click the memory chip
-icon next to the loaded model. Only one MLX model is ever resident; the Apple on-device model is
-managed by the system. Before loading, emmex compares the model's size with available memory and
-warns when it won't fit. In `chat`, `/model <spec>` switches models and keeps the transcript.
+Pulling a model only writes to disk. In the app, weights load only when you click Load model
+in the Models view, and stay loaded until you unload them there or from the sidebar. Several MLX
+models can be loaded at once; when a new one does not fit, the least recently used is unloaded
+first. Until a model is loaded, the model picker shows it disabled, a session that uses it opens
+without starting, and auto routing skips it. Before loading, emmex compares the model's size with
+available memory and warns when it won't fit. The CLI loads a model when you name it, since that is
+already an explicit request. In `chat`, `/model <spec>` switches models and keeps the transcript.
 
 ## App and web UI
 
