@@ -103,8 +103,8 @@ In chat: `/model <spec>`, `/effort <level>`, `/title <text>`, `/compact`, `/cont
 Model specs: `auto`, `system`, `pcc`, `claude:<name or API id>`, `mlx:<org/name>`,
 and `<provider>:<model>` for any OpenAI-compatible chat-completions endpoint.
 
-Claude: the picker shows `claude:opus5_5`, `claude:sonnet5` and `claude:haiku`. Other short names
-known to emmex (`fable5_1`, `fable5`, `opus5`, `opus4_8`, `opus4_7`, `opus4_6`, `sonnet4_6`) and any
+Claude: the picker shows `claude:opus5_5`, `claude:sonnet5_5` and `claude:haiku`. Other short names
+known to emmex (`fable5_1`, `fable5`, `opus5`, `sonnet5`, `opus4_8`, `opus4_7`, `opus4_6`, `sonnet4_6`) and any
 Anthropic API id (`claude:claude-opus-4-7`) work as specs everywhere; list them under
 `"claudeModels"` in `~/.emmex/settings.json` to add them to the picker.
 

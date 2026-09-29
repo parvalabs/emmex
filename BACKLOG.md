@@ -52,6 +52,11 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Harness
 
+- **Claude context windows** (2026-09-28): emmex treats every Claude model as 200K tokens, but
+  Opus 5.5, Sonnet 5.5 and Fable 5.1 have 1M-token windows (Haiku 4.5 is 200K). Using the real
+  window delays compaction, which means much longer, costlier prompts. Decide per model, maybe with
+  the same context setting MLX models have in the Models view.
+
 - **Session tree / branching** (2026-09-23): pi's `/tree` (in-file branches with LLM
   summaries when leaving a branch). Fork exists; a tree view does not.
 - **Steering mid-turn** (2026-09-23): messages typed during a turn are queued as

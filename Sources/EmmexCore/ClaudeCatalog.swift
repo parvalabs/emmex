@@ -11,10 +11,15 @@ public enum ClaudeCatalog {
     }
 
     static let haiku = ClaudeModel(id: "claude-haiku-4-5-20251001", capabilities: .init(effortLevels: [], structuredOutput: true))
+    /// Released 2026-09-28, after ClaudeForFoundationModels 0.2.1; capabilities as documented
+    /// (adaptive thinking, effort) and mirroring the package's Sonnet 5.
+    static let sonnet5_5 = ClaudeModel(id: "claude-sonnet-5-5", capabilities: .init(
+        effortLevels: [.low, .medium, .high, .xhigh, .max], adaptiveThinking: true, structuredOutput: true, imageInput: true))
 
     public static let entries: [Entry] = [
         .init(name: "fable5_1", label: "Fable 5.1", model: .fable5_1),
         .init(name: "opus5_5", label: "Opus 5.5", model: .opus5_5),
+        .init(name: "sonnet5_5", label: "Sonnet 5.5", model: sonnet5_5),
         .init(name: "sonnet5", label: "Sonnet 5", model: .sonnet5),
         .init(name: "haiku", label: "Haiku 4.5, the cheap tier", model: haiku),
         .init(name: "fable5", label: "Fable 5", model: .fable5),
@@ -26,11 +31,11 @@ public enum ClaudeCatalog {
     ]
 
     /// Shown in the picker without any setting.
-    public static let shown = ["opus5_5", "sonnet5", "haiku"]
+    public static let shown = ["opus5_5", "sonnet5_5", "haiku"]
 
     /// Other spellings people use for the same models.
     static let aliases: [String: String] = [
-        "sonnet": "sonnet5", "opus": "opus5_5", "fable": "fable5_1",
+        "sonnet": "sonnet5_5", "sonnet5.5": "sonnet5_5", "opus": "opus5_5", "fable": "fable5_1",
         "opus5.5": "opus5_5", "fable5.1": "fable5_1", "opus4.8": "opus4_8", "opus4.7": "opus4_7", "opus4.6": "opus4_6",
         "sonnet4.6": "sonnet4_6", "haiku4_5": "haiku", "haiku4.5": "haiku",
     ]
