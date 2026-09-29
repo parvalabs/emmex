@@ -277,3 +277,8 @@ working through the chain. `EMLEX_*` and `MLEX_*` environment variables, `emlex-
 (`main` at `ee673d6a`) with one patch: the FoundationModels adapter keeps the KV cache between
 requests, so a long session only prefills its new tokens on each turn. The patch is documented in
 `Vendor/mlx-swift-lm/EMMEX-PATCHES.md`; `EMMEX_MLX_PROMPT_CACHE=0` disables it.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Code adapted from OpenAI Codex (Apache-2.0) and the vendored
+mlx-swift-lm (MIT) keep their own notices; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

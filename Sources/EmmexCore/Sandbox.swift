@@ -1,9 +1,10 @@
 import Foundation
 
 /// Seatbelt (sandbox-exec) profiles for shell commands: default deny, with the process, sysctl,
-/// Mach, and device allowances a build toolchain needs (modeled on OpenAI Codex's base policy,
-/// Apache-2.0), reads everywhere except credential stores, writes only inside the workspace and
-/// the session's temp directory, and network egress only to the local filtering proxy.
+/// Mach, and device allowances a build toolchain needs (adapted from OpenAI Codex's Seatbelt base
+/// policy, Copyright 2025 OpenAI, Apache-2.0; see THIRD_PARTY_NOTICES.md), reads everywhere except
+/// credential stores, writes only inside the workspace and the session's temp directory, and
+/// network egress only to the local filtering proxy.
 public struct Sandbox: Sendable {
     public var workspace: URL
     public var cwd: URL
