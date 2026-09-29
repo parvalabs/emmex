@@ -74,6 +74,9 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## App
 
+- **Untested paths** (2026-09-28): the native folder picker in Add from folder (only the typed-path
+  version was tested), and Gemini through Google's OpenAI-compatible endpoint (no key yet).
+
 - **KV cache in the load check** (2026-09-25): the "expect swapping" warning and LRU eviction
   count only weights (+15%). Add the KV cache at the model's context window
   (`ModelInfo.kvBytes(at:)`) so an 8B model at 32K (4.3 GB + 4.5 GB) is judged by its real size.

@@ -5,8 +5,9 @@ One session API across the built-in on-device model, Private Cloud Compute, MLX 
 pulled from Hugging Face, and Claude. No Ollama, no LM Studio, no server process: models
 run inside the app.
 
-Status: exploration. A headless core, a CLI, and a first SwiftUI app exist.
-See `docs/FEASIBILITY.md` for the spike results that shaped the design.
+Status: working prototype, used on its own repo. A headless core, a CLI, and a Mac app with a
+web UI exist. See `docs/FEASIBILITY.md` for the spike results that shaped the design and
+`docs/DECISIONS.md` for why things are the way they are.
 
 ## Requirements
 
@@ -76,6 +77,13 @@ See `docs/FEASIBILITY.md` for the spike results that shaped the design.
   `"network": "none" | "all" | ["domain", …]` and `"sandbox": false` per server. SwiftPM
   commands get `--disable-sandbox` because macOS refuses nested sandboxes. `emmex sandbox --
   "<cmd>"` runs a command under the profile for testing. Disable with `"sandbox": false`.
+- **Secret scanner**: every message is checked before it reaches the router, any model, memory
+  or the session file. Patterns catch structured secrets (Authorization and bearer headers,
+  vendor API keys, JWTs, private keys, credentials in URLs, `curl -u`); when a message mentions
+  passwords, codes or keys and no pattern matched, the on-device model checks it with permissive
+  guardrails and must quote the secret exactly. A blocked message goes back to the composer with
+  a Send redacted option; the CLI refuses it. `emmex secrets -- "<text>"` shows what it finds;
+  disable with `"secretScan": false`. Tool output is not scanned yet (see the backlog).
 - **Effort** per message: `off | low | medium | high` (Claude effort, MLX thinking on/off).
 - **Explicit model loading**: MLX models load only from the Models view; several can stay loaded, with headroom warnings.
 
@@ -153,11 +161,17 @@ The same UI runs in any browser for development:
 .build/debug/emmex serve --web-root Sources/EmmexServer/Resources/web   # edit assets live
 ```
 
-Sidebar: workspace switcher with recents, new session (plain or on a worktree), sessions
-grouped by day. Top bar: session title (double-click to rename), worktree badge, context ring
-(click to compact). Composer: model and effort pickers, `/` suggestions for skills and templates,
-follow-up queue, stop. Models and Tools dialogs manage MLX pulls, MCP servers, skills,
-templates, and memory. Right-click a message to fork before it. The app adds native menus
+Sidebar: workspace switcher, Chat/Code switch (each mode has its own sessions), new session
+(plain or on a worktree), sessions grouped by day, and the loaded MLX models with an unload
+button. Top bar: session title (double-click to rename), worktree badge, Activity button,
+context ring (click to compact). The conversation shows only messages; tool calls collapse to a
+chip per burst. The right-hand panel (⌘J, resizable) has Activity, with the running turn and
+finished turns collapsed, and Changes, with this session's edits per file plus the workspace's
+uncommitted git diff. Composer: permission level on the left, model and effort pickers on the
+right, `/` suggestions for skills and templates, follow-up queue, stop. The full-screen Models
+view pulls, loads, unloads and deletes models, adds a model folder in place or as a copy, shows
+each model's location and details, and sets its context window with the KV cache memory it costs.
+The Tools dialog manages MCP servers, skills, templates, and memory. Right-click a message to fork before it. The app adds native menus
 (New Session, Open Folder, Compact, Export, Open in Browser) and Inspect Element for debugging.
 Private Cloud Compute needs Apple's managed entitlement and a real signing identity; see
 `scripts/Emmex.entitlements`.
@@ -170,6 +184,11 @@ Private Cloud Compute needs Apple's managed entitlement and a real signing ident
 | `Sources/emmex` | the CLI |
 | `Sources/EmmexServer` | localhost HTTP + SSE server, view-independent `AppController`, and the web UI in `Resources/web` |
 | `Sources/EmmexApp` | the Mac shell: a `WKWebView` window over the server, plus native menus |
+| `Tests/EmmexCoreTests` | unit tests (`swift test`): routing floor, policy engine, sandbox profile, secret scanner, model library, migrations |
+| `evals/` | classifier evals with labelled data, runners and results ([RESULTS.md](evals/RESULTS.md)) |
+| `Vendor/mlx-swift-lm` | mlx-swift-lm with emmex's KV-cache reuse patch ([EMMEX-PATCHES.md](Vendor/mlx-swift-lm/EMMEX-PATCHES.md)) |
+| `docs/` | [FEASIBILITY.md](docs/FEASIBILITY.md) spike results and [DECISIONS.md](docs/DECISIONS.md), the decision log |
+| `BACKLOG.md` | pending work and what's done, dated |
 | `scripts/` | app bundling and entitlements |
 | `Sources/spike-*` | the three feasibility spikes, kept runnable |
 
