@@ -2,7 +2,8 @@
 
 emmex is a Swift, UI-first Mac agent harness on Apple's FoundationModels (macOS 27). Read
 `README.md` for features, `docs/DECISIONS.md` for why things are the way they are, `BACKLOG.md`
-for pending work. The repo folder is still named `ksmos`.
+for pending work. The code is at https://github.com/parvalabs/emmex (private until release);
+the local folder is still named `ksmos`.
 
 ## Build and test
 

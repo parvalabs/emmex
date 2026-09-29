@@ -402,6 +402,14 @@ entry for Google's OpenAI-compatible endpoint (see the README).
 assumes 200K, which affects when compaction runs and what long prompts cost; **deferred by the
 user** the same day, so 200K stays until it is discussed.
 
+### 2026-09-29 · Open source: MIT, on GitHub under parvalabs
+
+**Decided (user):** release under the MIT License, soon. Code adapted from OpenAI Codex
+(Apache-2.0) and the vendored mlx-swift-lm keep their notices in THIRD_PARTY_NOTICES.md
+(`781ecf1`). The repository is https://github.com/parvalabs/emmex, created private and pushed
+with the full history after a scan found no keys, personal paths or email in it. It goes public
+once the release checklist in the backlog is done. The local folder stays `ksmos`.
+
 ## Open questions
 
 Each is tracked in [BACKLOG.md](../BACKLOG.md).
@@ -414,4 +422,4 @@ Each is tracked in [BACKLOG.md](../BACKLOG.md).
 - Terminal and browser panes, session tree, mid-turn steering, Tasks mode, provider model
   discovery, a Bedrock Converse adapter.
 - The silent exit on launch, if it ever reproduces.
-- Whether to rename the repo folder from `ksmos`.
+- Whether to rename the local folder from `ksmos` (the GitHub repo is `parvalabs/emmex`).

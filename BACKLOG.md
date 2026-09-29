@@ -7,8 +7,8 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 - **Before publishing** (2026-09-29): the MIT license and third-party notices are in place. Still
   to do: ship dependency license notices inside `Emmex.app` for binary releases (see
-  THIRD_PARTY_NOTICES.md); decide the public repo name (the folder is still `ksmos`); a
-  `CONTRIBUTING.md` and issue templates if outside contributions are wanted. A scan on
+  THIRD_PARTY_NOTICES.md); a `CONTRIBUTING.md` and issue templates if outside contributions are
+  wanted; then switch https://github.com/parvalabs/emmex to public (private since 2026-09-29). A scan on
   2026-09-29 found no keys, personal paths or email in tracked files or history; the only
   key-like strings are scanner patterns and fake test keys.
 
