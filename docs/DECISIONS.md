@@ -398,8 +398,9 @@ a model there is the request (`7a54cd7`).
 `claude-sonnet-5-5`) and Haiku; other Claude models can be added with `claudeModels` in
 settings, by short name or API id (`36e2409`, `bc0a343`). Gemini needs no code: a `providers`
 entry for Google's OpenAI-compatible endpoint (see the README).
-**Open:** Gemini is untested (no key); current Claude models have 1M-token windows while emmex
-assumes 200K, which affects when compaction runs and what long prompts cost.
+**Open:** Gemini is untested (no key). Current Claude models have 1M-token windows while emmex
+assumes 200K, which affects when compaction runs and what long prompts cost; **deferred by the
+user** the same day, so 200K stays until it is discussed.
 
 ## Open questions
 
@@ -409,7 +410,7 @@ Each is tracked in [BACKLOG.md](../BACKLOG.md).
   messages follow it.
 - Jev has never been validated.
 - Smart mode's pending rules and implicit approval; secret scanning of tool output.
-- Claude context windows: keep 200K or use the real 1M.
+- Claude context windows: keep 200K or use the real 1M (deferred).
 - Terminal and browser panes, session tree, mid-turn steering, Tasks mode, provider model
   discovery, a Bedrock Converse adapter.
 - The silent exit on launch, if it ever reproduces.
