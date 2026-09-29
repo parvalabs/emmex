@@ -262,15 +262,6 @@ Private Cloud Compute needs Apple's managed entitlement and a real signing ident
 Tools are defined with `DynamicGenerationSchema` rather than `@Generable`, so they can be
 declared at runtime and the package builds without the macro plugin.
 
-## Earlier names
-
-The project was called mlex until 2026-09-24 and emlex until 2026-09-27. The first run of
-emmex moves `~/Library/Application Support/<old>`, `~/.cache/<old>` and `~/.<old>` to their
-`emmex` names and leaves a symlink at each old path, so git worktrees and saved sessions keep
-working through the chain. `EMLEX_*` and `MLEX_*` environment variables, `emlex-*` and
-`mlex-*` Keychain items and per-project `.emlex/` and `.mlex/` folders are still read when the
-`emmex` ones are missing.
-
 ## Vendored dependencies
 
 `Vendor/mlx-swift-lm` is a copy of [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm)

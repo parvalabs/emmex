@@ -40,7 +40,7 @@ public struct Sandbox: Sendable {
 
     /// Config that the agent or its tools would execute later: never writable, even in the
     /// workspace (git hooks and config, shell startup, editor and agent directories, MCP config).
-    static let protectedNames: [String] = [".git/hooks", ".git/config", ".gitconfig", ".gitmodules", ".gitattributes", ".emmex", ".emlex", ".mlex", ".claude", ".cursor", ".vscode", ".idea", ".husky",
+    static let protectedNames: [String] = [".git/hooks", ".git/config", ".gitconfig", ".gitmodules", ".gitattributes", ".emmex", ".claude", ".cursor", ".vscode", ".idea", ".husky",
                                            ".mcp.json", ".zshrc", ".zprofile", ".zshenv", ".zlogin", ".bashrc", ".bash_profile", ".profile", ".ripgreprc", ".npmrc", ".direnv", ".envrc"]
 
     func q(_ p: String) -> String { "\"" + p.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\"" }

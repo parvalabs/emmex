@@ -54,13 +54,12 @@ public actor ModelStore {
     public func isLinked(_ id: String) -> Bool { linked[id] != nil }
 
     static let marker = ".emmex-complete"
-    static let legacyMarkers = [".emlex-complete", ".mlex-complete"]   // pulls finished before the renames
 
     /// Installed means the pull finished: a completion marker is written after the last file.
     public func isInstalled(_ id: String) -> Bool {
         let dir = directory(for: id)
         if linked[id] != nil { return FileManager.default.fileExists(atPath: dir.appending(path: "config.json").path) }
-        return ([Self.marker] + Self.legacyMarkers).contains { FileManager.default.fileExists(atPath: dir.appending(path: $0).path) }
+        return FileManager.default.fileExists(atPath: dir.appending(path: Self.marker).path)
     }
 
     /// A directory exists for the model but the pull never completed.

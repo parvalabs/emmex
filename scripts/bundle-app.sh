@@ -6,8 +6,8 @@ CONF=${1:-debug}
 # Real signing (needed for Private Cloud Compute): set EMMEX_SIGN_IDENTITY to a "Apple Development: …"
 # identity from `security find-identity -v -p codesigning` and EMMEX_PROFILE to a .provisionprofile
 # whose entitlements include com.apple.developer.private-cloud-compute. Otherwise the app is ad-hoc signed.
-IDENTITY=${EMMEX_SIGN_IDENTITY:-${EMLEX_SIGN_IDENTITY:-${MLEX_SIGN_IDENTITY:-}}}
-PROFILE=${EMMEX_PROFILE:-${EMLEX_PROFILE:-${MLEX_PROFILE:-}}}
+IDENTITY=${EMMEX_SIGN_IDENTITY:-}
+PROFILE=${EMMEX_PROFILE:-}
 swift build -c "$CONF" --product EmmexApp
 APP=.build/Emmex.app
 rm -rf "$APP"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"

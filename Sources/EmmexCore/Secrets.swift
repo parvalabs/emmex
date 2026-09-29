@@ -14,15 +14,7 @@ public enum Secrets {
         return nil
     }
 
-    /// Keychain lookup; an `emmex-*` service falls back to its pre-rename `emlex-*` and `mlex-*` items.
     static func keychain(service: String) -> String? {
-        if let v = keychainItem(service) { return v }
-        guard service.hasPrefix("emmex-") else { return nil }
-        let rest = service.dropFirst("emmex-".count)
-        return Paths.legacyNames.lazy.compactMap { keychainItem("\($0)-\(rest)") }.first
-    }
-
-    static func keychainItem(_ service: String) -> String? {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
         p.arguments = ["find-generic-password", "-s", service, "-w"]

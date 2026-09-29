@@ -111,9 +111,9 @@ commands; Claude does the rest. Setup notes: the API key went into the Keychain 
 was not an API key); Xcode 27 plus its Metal Toolchain are required; the MLX bridge exists only
 on mlx-swift-lm `main`.
 
-### 2026-09-22 · Rename to mlex, UI-first
+### 2026-09-22 · UI-first
 
-**Decided (user):** rename ksmos to mlex and make it UI-first, like pi-gui: pull MLX models and
+**Decided (user):** make the product UI-first, like pi-gui: pull MLX models and
 use them at once, with no Ollama or LM Studio, next to the built-in model; keep a headless CLI
 for development and tests.
 **Assessment:** "MLX without Ollama" alone is a crowded field (nativ, macMLX, ChatMLX, Klee). The
@@ -346,17 +346,13 @@ model, 6 of 12 plain-language secrets were caught blind (10 of 12 after widening
 gate), with no false alarms (`270eafc`).
 **Status:** tool output is not scanned yet.
 
-### 2026-09-24 → 2026-09-27 · The name: mlex → emlex → emmex
+### 2026-09-27 · The name: emmex
 
-- **emlex (`334bb09`):** the user needed a name with an available .ai domain and narrowed it to
-  mlex or emlex, and is fine with resembling MLX. emlex spells its pronunciation and separates
-  visually from MLX; it sits close to Apple Mail's `.emlx`. The assistant noted both names tie
-  the product to MLX, now one backend among several.
-- **emmex (`fd8a559`):** one pronunciation, no software clashes, an echo of Vannevar Bush's
-  memex (fitting the memory feature), and the domain was free; the user registered emmex.ai.
-- Both renames move data folders on first run and leave symlinks, so mlex → emlex → emmex
-  resolves as a chain; old environment variables, Keychain items, project folders and model
-  markers keep working. The repo folder stays `~/Projects/ksmos`.
+**Decided (user):** the product is emmex. The user needed a name with an available .ai domain and
+registered emmex.ai. It has one pronunciation, no clashes in software (a musician, a sandal, a
+tools company, a construction-recycling firm), and echoes Vannevar Bush's memex, which fits the
+memory feature. Earlier working names were dropped before any release, along with their
+compatibility code (`fd8a559`). The local repo folder is still `ksmos`.
 
 ### 2026-09-24 · Remove model did nothing in the app
 

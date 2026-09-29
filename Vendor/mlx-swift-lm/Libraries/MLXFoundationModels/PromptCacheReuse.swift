@@ -21,11 +21,8 @@ final class PromptCacheRegistry: @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [String: PromptCacheEntry] = [:]
 
-    /// `EMMEX_MLX_PROMPT_CACHE=0` (or the pre-rename `EMLEX_`/`MLEX_` spelling) turns reuse off (every request prefills everything).
-    static let enabled: Bool = {
-        let env = ProcessInfo.processInfo.environment
-        return (env["EMMEX_MLX_PROMPT_CACHE"] ?? env["EMLEX_MLX_PROMPT_CACHE"] ?? env["MLEX_MLX_PROMPT_CACHE"]) != "0"
-    }()
+    /// `EMMEX_MLX_PROMPT_CACHE=0` turns reuse off (every request prefills everything).
+    static let enabled: Bool = ProcessInfo.processInfo.environment["EMMEX_MLX_PROMPT_CACHE"] != "0"
 
     func entry(for modelID: String) -> PromptCacheEntry {
         lock.lock(); defer { lock.unlock() }

@@ -128,7 +128,7 @@ public actor PolicyEngine {
 
     /// Files that allow rules must never cover, inside or outside the workspace (Claude Code's
     /// protected-path idea): VCS and agent config, shell startup files, secrets.
-    static let protectedNames: [String] = [".git/", ".emmex/", ".emlex/", ".mlex/", ".claude/", ".vscode/", ".husky/", ".env", ".npmrc", ".mcp.json", ".ssh/", ".aws/", ".gnupg/",
+    static let protectedNames: [String] = [".git/", ".emmex/", ".claude/", ".vscode/", ".husky/", ".env", ".npmrc", ".mcp.json", ".ssh/", ".aws/", ".gnupg/",
                                            ".zshrc", ".zprofile", ".zshenv", ".bashrc", ".bash_profile", ".profile", "id_rsa", "id_ed25519", ".pem", ".key"]
     static func isProtectedPath(_ p: String) -> Bool { protectedName(p) != nil }
     static func protectedName(_ p: String) -> String? {

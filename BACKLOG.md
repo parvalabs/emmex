@@ -16,7 +16,7 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 - **Private Cloud Compute** (2026-09-23): waiting on Apple's approval of the managed
   capability (Small Business Program applied). Then: development certificate, App ID with the
-  PCC capability, provisioning profile, and `MLEX_SIGN_IDENTITY`/`MLEX_PROFILE` in
+  PCC capability, provisioning profile, and `EMMEX_SIGN_IDENTITY`/`EMMEX_PROFILE` in
   `scripts/bundle-app.sh`. Add quota state and the iCloud+ upgrade sheet to the model list.
 - **Jev router validation** (2026-09-23): the request shape in `JevRouter` follows
   TypeSafe's published examples but has not run against a live key. Measure routing
@@ -105,12 +105,7 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Done
 
-- **Name** (2026-09-27): renamed emlex → emmex, with emmex.ai registered. Folders move on first
-  run and leave symlinks, so mlex → emlex → emmex resolves as a chain; `EMLEX_*`/`MLEX_*`
-  variables, `emlex-*`/`mlex-*` Keychain items and `.emlex/`/`.mlex/` project folders still work.
-- **Name** (2026-09-24): renamed mlex → emlex, chosen for an available .ai domain. Old data
-  folders move on first run and leave symlinks; `MLEX_*` variables, `mlex-*` Keychain items and
-  per-project `.mlex/` folders still work.
+- **Name** (2026-09-27, `fd8a559`): the product is emmex, with emmex.ai registered.
 - **Laya as router or safety judge** (2026-09-24, evaluated, not adopted): on `evals/` the
   0.4B encoder is 15 to 20 times faster than the 3B judge but much less accurate. Routing 48%
   vs 81%, and it rarely predicts frontier. Safety: 22 unsafe allows vs 8 for the 3B, or 4
