@@ -74,3 +74,23 @@ import Testing
         #expect(p.contains("4321"))
     }
 }
+
+@Suite struct ClaudeCatalogTests {
+    @Test func namesAliasesAndIdsResolveToTheSameModel() {
+        #expect(ClaudeCatalog.model("opus5_5").id == "claude-opus-5-5")
+        #expect(ClaudeCatalog.model("opus").id == "claude-opus-5-5")
+        #expect(ClaudeCatalog.model("claude-opus-5-5").id == "claude-opus-5-5")
+        #expect(ClaudeCatalog.model("haiku").id == "claude-haiku-4-5-20251001")
+    }
+    @Test func unknownIdsPassThrough() {
+        #expect(ClaudeCatalog.model("claude-future-9").id == "claude-future-9")
+    }
+    @Test func pickerAddsSettingsWithoutDuplicates() {
+        var s = Settings(); s.claudeModels = ["opus4_8", "claude-opus-5-5", "claude-custom-1"]
+        let names = ClaudeCatalog.pickerNames(settings: s)
+        #expect(names.prefix(3) == ["opus5_5", "sonnet5", "haiku"])
+        #expect(!names.contains("fable5_1"))
+        #expect(names.contains("opus4_8") && names.contains("claude-custom-1"))
+        #expect(names.filter { $0 == "opus5_5" }.count == 1)
+    }
+}

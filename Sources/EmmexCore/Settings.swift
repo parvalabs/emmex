@@ -19,7 +19,7 @@ public struct Settings: Codable, Sendable {
     public init() {}
 
     // Every key is optional in the file: a partial settings.json keeps the defaults for the rest.
-    enum CodingKeys: String, CodingKey { case routes, router, memory, providers, permission, sandbox, network, unsandboxedRetry, secretScan, models }
+    enum CodingKeys: String, CodingKey { case routes, router, memory, providers, permission, sandbox, network, unsandboxedRetry, secretScan, models, claudeModels }
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         routes = try c.decodeIfPresent(Routes.self, forKey: .routes) ?? Routes()
@@ -32,6 +32,7 @@ public struct Settings: Codable, Sendable {
         unsandboxedRetry = try c.decodeIfPresent(Bool.self, forKey: .unsandboxedRetry) ?? true
         secretScan = try c.decodeIfPresent(Bool.self, forKey: .secretScan) ?? true
         models = try c.decodeIfPresent([String: ModelPrefs].self, forKey: .models) ?? [:]
+        claudeModels = try c.decodeIfPresent([String].self, forKey: .claudeModels)
     }
     /// "ondevice" (default) or "jev" (TypeSafe Jev; needs a key in Keychain service `emmex-jev` or JEV_API_KEY).
     public var router: String = "ondevice"
@@ -62,6 +63,8 @@ public struct Settings: Codable, Sendable {
         public init(context: Int? = nil) { self.context = context }
     }
     public var models: [String: ModelPrefs] = [:]
+    /// Extra Claude models for the picker, by short name (`opus4_8`) or API id (`claude-opus-4-7`).
+    public var claudeModels: [String]? = nil
 
     /// OpenAI-compatible chat-completions providers, keyed by the name used in specs (`<name>:<model>`).
     public struct Provider: Codable, Sendable, Hashable {

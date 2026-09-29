@@ -20,11 +20,12 @@ public enum Backends {
                                                   : "needs the com.apple.developer.private-cloud-compute entitlement (signed app only)"))
         case .unavailable(let r): out.append(.init(spec: "pcc", available: false, detail: "\(r)"))
         }
-        out.append(.init(spec: "claude:sonnet5", available: Secrets.anthropicKey() != nil,
-                         detail: Secrets.anthropicKey() != nil ? "key found" : "no API key"))
-        out.append(.init(spec: "claude:haiku", available: Secrets.anthropicKey() != nil,
-                         detail: Secrets.anthropicKey() != nil ? "Haiku 4.5, the cheap tier" : "no API key"))
         let settings = Settings.load()
+        let hasKey = Secrets.anthropicKey() != nil
+        for name in ClaudeCatalog.pickerNames(settings: settings) {
+            let label = ClaudeCatalog.entry(name)?.label ?? name
+            out.append(.init(spec: "claude:\(name)", available: hasKey, detail: hasKey ? label : "\(label) · no API key"))
+        }
         for (name, p) in settings.allProviders.sorted(by: { $0.key < $1.key }) {
             let key = Secrets.providerKey(p)
             let ok = p.requiresKey == false || key != nil
@@ -70,13 +71,7 @@ public enum Backends {
             return LanguageModelSession(model: m, tools: tools, instructions: instructions)
         case .claude(let name):
             guard let key = Secrets.anthropicKey() else { throw EmmexError.missingAPIKey }
-            let model: ClaudeModel = switch name {
-                case "sonnet5", "sonnet": .sonnet5
-                case "opus", "opus5_5", "opus5.5": .opus5_5
-                case "opus4_8", "opus4.8": .opus4_8
-                case "haiku", "haiku4_5", "haiku4.5": ClaudeModel(id: "claude-haiku-4-5-20251001", capabilities: .init(effortLevels: [], structuredOutput: true))
-                default: ClaudeModel(id: name, capabilities: .init(effortLevels: [.low, .high], structuredOutput: true))
-            }
+            let model = ClaudeCatalog.model(name)
             let m = ClaudeLanguageModel(name: model, auth: .apiKey(key))
             if let t = transcript { return LanguageModelSession(model: m, tools: tools, transcript: t) }
             return LanguageModelSession(model: m, tools: tools, instructions: instructions)

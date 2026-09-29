@@ -100,8 +100,15 @@ In chat: `/model <spec>`, `/effort <level>`, `/title <text>`, `/compact`, `/cont
 `/memory`, `/fork [N]`, `/export [file]`, `/skills`, `/prompts`, `/tools`, `/sessions`,
 `/skill:<name> [args]`, `/<template> [args]`.
 
-Model specs: `auto`, `system`, `pcc`, `claude:<sonnet5|haiku|opus5_5|opus4_8|id>`, `mlx:<org/name>`,
-and `<provider>:<model>` for any OpenAI-compatible chat-completions endpoint. Built-in providers:
+Model specs: `auto`, `system`, `pcc`, `claude:<name or API id>`, `mlx:<org/name>`,
+and `<provider>:<model>` for any OpenAI-compatible chat-completions endpoint.
+
+Claude: the picker shows `claude:opus5_5`, `claude:sonnet5` and `claude:haiku`. Other short names
+known to emmex (`fable5_1`, `fable5`, `opus5`, `opus4_8`, `opus4_7`, `opus4_6`, `sonnet4_6`) and any
+Anthropic API id (`claude:claude-opus-4-7`) work as specs everywhere; list them under
+`"claudeModels"` in `~/.emmex/settings.json` to add them to the picker.
+
+Other providers: Built-in providers:
 `openai` (key in Keychain `emmex-openai` or `OPENAI_API_KEY`), `bedrock` (Bedrock API key in
 `emmex-bedrock` or `AWS_BEARER_TOKEN_BEDROCK`; us-east-1 by default; only models that support
 Bedrock's Chat Completions API, e.g. `openai.gpt-oss-120b-1:0`, not Claude or Nova), and
@@ -114,6 +121,15 @@ Bedrock's Chat Completions API, e.g. `openai.gpt-oss-120b-1:0`, not Claude or No
 
 Fields: `url`, `keychain` or `env` for the key, optional `headers`, `models` for the picker,
 `guided` (structured output support, default true), `context`, `requiresKey` (false for local servers).
+
+Gemini, through Google's OpenAI-compatible endpoint (store the key with
+`security add-generic-password -s emmex-gemini -a "$USER" -w`):
+
+```json
+{ "providers": { "gemini": { "url": "https://generativelanguage.googleapis.com/v1beta/openai",
+                              "keychain": "emmex-gemini", "env": "GEMINI_API_KEY",
+                              "models": ["gemini-3.8-flash"] } } }
+```
 MLX weights live in `~/.cache/emmex/models/<org>/<name>`. Set `EMMEX_USAGE=1` to print token usage.
 
 ## Memory
