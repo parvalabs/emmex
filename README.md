@@ -9,12 +9,78 @@ Status: working prototype, used on its own repo. A headless core, a CLI, and a M
 web UI exist. See `docs/FEASIBILITY.md` for the spike results that shaped the design and
 `docs/DECISIONS.md` for why things are the way they are.
 
-## Requirements
+## Setup
 
-- macOS 27, Apple silicon, Apple Intelligence enabled
-- Xcode 27 with the Metal Toolchain component (`xcodebuild -downloadComponent MetalToolchain`)
-- For Claude: an API key in the Keychain (`security add-generic-password -s emmex-anthropic -a "$USER" -w`)
-  or `ANTHROPIC_API_KEY` in the environment
+Tested on macOS 27.0 with Xcode 27.0 (Swift 6.4) on a base M4 with 24 GB.
+
+**You need:** a Mac with Apple silicon on macOS 27, about 5 GB of disk for Xcode's build output
+plus room for any local models, and an internet connection for the first build.
+
+1. **Install Xcode 27** from the App Store or developer.apple.com, then accept its license and
+   finish its first launch. The Command Line Tools alone cannot build emmex: they lack the
+   FoundationModels macros and the macOS 27 framework APIs.
+
+   ```bash
+   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+   sudo xcodebuild -license accept
+   sudo xcodebuild -runFirstLaunch
+   ```
+
+2. **Add the Metal Toolchain.** Xcode 27 ships without the Metal shader compiler that MLX needs.
+
+   ```bash
+   xcodebuild -downloadComponent MetalToolchain
+   ```
+
+   `xcodebuild -showComponent MetalToolchain` should then say `Status: installed`.
+
+3. **Turn on Apple Intelligence** in System Settings > Apple Intelligence & Siri, and wait for
+   the on-device model to finish downloading. Until it does, the `system` model, routing,
+   memory and the safety judge are unavailable.
+
+4. **Store your Anthropic API key** in the Keychain. The command prompts for the key, so it
+   never shows on screen. Setting `ANTHROPIC_API_KEY` in the environment also works.
+
+   ```bash
+   security add-generic-password -s emmex-anthropic -a "$USER" -w
+   ```
+
+5. **Build and test.** The first build fetches the Swift packages.
+
+   ```bash
+   swift build
+   swift test
+   ```
+
+6. **Check the setup.** `system` should have a filled dot (available), and no Claude model should
+   say "no API key".
+
+   ```bash
+   .build/debug/emmex models
+   ```
+
+7. **Run it:** `scripts/bundle-app.sh debug && open .build/Emmex.app` for the Mac app,
+   `.build/debug/emmex serve --open` for the same UI in a browser, or `.build/debug/emmex chat`.
+
+**Local models (optional).** Pull an MLX model from Hugging Face, then load it from the Models
+view in the app. An 8B model at 4-bit takes about 4.3 GB of disk and memory, and its KV cache
+adds about 4.5 GB at a 32K-token window; the Models view shows the cost for each model.
+
+```bash
+.build/debug/emmex models pull mlx-community/Qwen3-4B-4bit
+```
+
+**Other providers (optional).** OpenAI, Bedrock, Gemini and other OpenAI-compatible endpoints
+need their own key in the Keychain (`emmex-<provider>`); see [CLI](#cli).
+
+**Evals (optional).** The Laya comparison needs Python 3.12 in a venv; see
+[evals/README.md](evals/README.md).
+
+**Private Cloud Compute (not yet available).** It needs Apple's managed entitlement
+`com.apple.developer.private-cloud-compute`, a signing identity and a provisioning profile.
+Once Apple approves the entitlement, build with `EMMEX_SIGN_IDENTITY` and `EMMEX_PROFILE` set
+(see `scripts/bundle-app.sh`). The entitlement has been requested; see
+[docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## What it does
 

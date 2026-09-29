@@ -6,7 +6,8 @@ for pending work. The repo folder is still named `ksmos`.
 
 ## Build and test
 
-Requires macOS 27, Xcode 27 with its Metal Toolchain component, Apple Intelligence enabled.
+Requires macOS 27, Xcode 27 with its Metal Toolchain component, and Apple Intelligence enabled;
+the step-by-step setup is in the README's Setup section.
 
 ```bash
 swift build                          # everything; the CLI is .build/debug/emmex
