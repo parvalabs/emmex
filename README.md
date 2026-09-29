@@ -189,6 +189,7 @@ Private Cloud Compute needs Apple's managed entitlement and a real signing ident
 | `Vendor/mlx-swift-lm` | mlx-swift-lm with emmex's KV-cache reuse patch ([EMMEX-PATCHES.md](Vendor/mlx-swift-lm/EMMEX-PATCHES.md)) |
 | `docs/` | [FEASIBILITY.md](docs/FEASIBILITY.md) spike results and [DECISIONS.md](docs/DECISIONS.md), the decision log |
 | `BACKLOG.md` | pending work and what's done, dated |
+| `CLAUDE.md` | how to build and test, including driving the UI from Claude's built-in browser |
 | `scripts/` | app bundling and entitlements |
 | `Sources/spike-*` | the three feasibility spikes, kept runnable |
 
