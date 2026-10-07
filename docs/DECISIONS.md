@@ -330,8 +330,8 @@ Details in [evals/RESULTS.md](../evals/RESULTS.md).
 usually follow an explicit request, so the request is the approval. The safety judge should see
 the user's latest message and allow a command it explicitly asks for; only the user's own words
 count, never tool output or file contents (`c702bcb`).
-**Status:** decided, not built; deterministic rules for publishing, user-global installs and
-`defaults write` are also pending.
+**Status:** decided, not built. The deterministic rules for publishing, user-global installs and
+`defaults write` landed on 2026-10-07 (below); installs outside a venv or vendor dir are pending.
 
 ### 2026-09-24 · Secret scanner
 
@@ -406,6 +406,33 @@ user** the same day, so 200K stays until it is discussed.
 with the full history after a scan found no keys, personal paths or email in it. It goes public
 once the release checklist in the backlog is done. The local folder stays `ksmos`.
 
+### 2026-10-07 · Publishing and global-state commands ask
+
+**Problem:** the eval found smart mode running `npm publish`, `git push origin main`,
+`pip install --user` and `defaults write` unasked, because no rule matched and the 3B judge called
+them safe.
+**Decided:** a deterministic check, `PolicyEngine.publishesOrChangesGlobalState`, asks before
+publishing (`npm`/`cargo publish`, `gem push`, `twine upload`, `git push`, `gh pr create`),
+user-global installs (`pip install --user`, `npm install -g`) and `defaults write`. It matches the
+command words of each subcommand after `split` and `stripWrappers`, not the raw string, so a commit
+message that mentions "npm publish" does not trigger it. In `decide()` it runs:
+1. after an explicit Always Allow pattern, so a user who chose "always allow `git push *`" is not
+   asked again and the button keeps working;
+2. after the read-only rule;
+3. before ask mode, so the eval harness, which runs ask mode to see which rule decided, credits
+   the rule;
+4. before script provenance, which allows a whole compound command when one script in it was
+   written by emmex; otherwise `bash build.sh && npm publish` would publish unasked;
+5. before the on-device judge, because actions that leave the machine or change global state
+   should get the same answer every time, not depend on a nondeterministic 3B model.
+
+`git push --force` keeps its hard rule, which runs earlier. A local `git rebase` stays unasked, as
+decided on 2026-09-24. Effect on the eval, with the 2026-09-24 judge answers held fixed: unsafe
+allows 7 → 3 and needless asks 4 → 4 (details in [evals/RESULTS.md](../evals/RESULTS.md)).
+**Open:** `pip install` outside a venv and `bundle install` outside a vendor dir; option-first
+forms such as `git -C .. push` and `npm --global install x` are not caught (see Shell AST parsing
+in the backlog).
+
 ## Open questions
 
 Each is tracked in [BACKLOG.md](../BACKLOG.md).
@@ -413,7 +440,7 @@ Each is tracked in [BACKLOG.md](../BACKLOG.md).
 - Private Cloud Compute is waiting on Apple's entitlement approval; quota and availability
   messages follow it.
 - Jev has never been validated.
-- Smart mode's pending rules and implicit approval; secret scanning of tool output.
+- Smart mode's install-outside-a-venv rules and implicit approval; secret scanning of tool output.
 - Claude context windows: keep 200K or use the real 1M (deferred).
 - Terminal and browser panes, session tree, mid-turn steering, Tasks mode, provider model
   discovery, a Bedrock Converse adapter.

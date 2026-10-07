@@ -87,6 +87,9 @@ public actor PolicyEngine {
         if Self.isOpaque(cmd) { return .ask("opaque command (sh -c, eval, or command substitution)") }
         if matchesAllowList(cmd) { return .allow("always-allowed pattern") }
         if Self.isReadOnly(cmd) { return .allow("rule: read-only command") }
+        // Before ask mode (the evals read ask mode to see which rule decided) and before provenance
+        // (which allows a whole compound command because of one script in it).
+        if let what = Self.publishesOrChangesGlobalState(cmd) { return .ask("publishes or changes global state: \(what)") }
         if level == .ask { return .ask("ask mode") }
         if let script = Self.executedScript(cmd) {
             let path = Self.canonical(script.hasPrefix("/") ? script : cwd.appending(path: script).path)
@@ -149,6 +152,27 @@ public actor PolicyEngine {
                 if let top = ["/Users", "/Applications", "/Library", "/System", "/usr", "/etc", "/var", "/private"].first(where: { a == $0 || a == $0 + "/" }) { return top }
                 if a == NSHomeDirectory() || a == NSHomeDirectory() + "/" { return "home directory" }
             }
+        }
+        return nil
+    }
+
+    /// Publishing (`npm publish`, `git push`, `gh pr create`…), user-global installs, and macOS
+    /// defaults: effects that leave the project, which the 3B judge calls safe. Returns what matched.
+    static func publishesOrChangesGlobalState(_ cmd: String) -> String? {
+        for part in split(cmd) {
+            var words = stripWrappers(part.split(separator: " ").map(String.init))
+            guard let head = words.first.map(basename) else { continue }
+            if head.hasPrefix("python"), words.count > 2, words[1] == "-m", words[2] == "pip" { words.removeFirst(2) }   // python3 -m pip … → pip …
+            let tool = basename(words[0]), sub = words.count > 1 ? words[1] : ""
+            let what = "\(tool) \(sub)"
+            if ["npm", "cargo"].contains(tool), sub == "publish" { return what }
+            if tool == "gem", sub == "push" || sub == "publish" { return what }
+            if tool == "twine", sub == "upload" { return what }
+            if tool == "git", sub == "push" { return what }
+            if tool == "gh", sub == "pr", words.count > 2, words[2] == "create" { return "gh pr create" }
+            if ["pip", "pip3"].contains(tool), sub == "install", words.contains("--user") { return "\(what) --user" }
+            if tool == "npm", sub == "install" || sub == "i", words.contains("-g") || words.contains("--global") { return "\(what) --global" }
+            if tool == "defaults", sub == "write" { return what }
         }
         return nil
     }
