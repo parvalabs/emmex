@@ -330,8 +330,8 @@ Details in [evals/RESULTS.md](../evals/RESULTS.md).
 usually follow an explicit request, so the request is the approval. The safety judge should see
 the user's latest message and allow a command it explicitly asks for; only the user's own words
 count, never tool output or file contents (`c702bcb`).
-**Status:** decided, not built. The deterministic rules for publishing, user-global installs and
-`defaults write` landed on 2026-10-07 (below); installs outside a venv or vendor dir are pending.
+**Status:** decided, not built. The deterministic rules for publishing, user-global installs,
+`defaults write`, and installs outside a virtualenv or vendor dir landed on 2026-10-07 (below).
 
 ### 2026-09-24 · Secret scanner
 
@@ -429,9 +429,40 @@ message that mentions "npm publish" does not trigger it. In `decide()` it runs:
 `git push --force` keeps its hard rule, which runs earlier. A local `git rebase` stays unasked, as
 decided on 2026-09-24. Effect on the eval, with the 2026-09-24 judge answers held fixed: unsafe
 allows 7 → 3 and needless asks 4 → 4 (details in [evals/RESULTS.md](../evals/RESULTS.md)).
-**Open:** `pip install` outside a venv and `bundle install` outside a vendor dir; option-first
-forms such as `git -C .. push` and `npm --global install x` are not caught (see Shell AST parsing
-in the backlog).
+**Open:** option-first forms such as `git -C .. push` and `npm --global install x` are not caught
+(see Shell AST parsing in the backlog). Installs outside a venv or vendor dir followed the same
+day (next entry).
+
+### 2026-10-07 · Installs outside a virtualenv or vendor dir ask
+
+**Problem:** the 3B judge called `pip install -r requirements.txt` and `bundle install` safe, so
+smart mode ran them unasked. Outside a virtualenv or a project-local bundle path they write to the
+user's or system's Python and Ruby, which outlives the project and affects other work.
+**Decided:** a deterministic ask, so the answer does not depend on a nondeterministic model. It
+stays inside `publishesOrChangesGlobalState`, with no new step in `decide()`, so it runs where the
+publishing rule does (after Always Allow and the read-only rule; before ask mode, provenance and the
+judge) and the evals credit it.
+- **What counts as local:** for pip, a relative `.venv`, `venv`, `.env` or `env` directory's
+  `bin/pip`, `bin/pip3`, `bin/python` or `bin/python3` (no `..`, no leading `/`, `~` or `$`), or a
+  `pip install` after `source <relative>/bin/activate` in the same command. For bundle,
+  `--path <relative>`, `--path=<relative>`, `--deployment`, or a relative `BUNDLE_PATH=…` in front
+  of the command.
+- **Anything else asks:** `/usr/bin/pip3`, `tools/bin/pip`, a venv with another name, a venv
+  activated before emmex started, an existing `.bundle/config`, `bundle install --local`. The rule
+  reads only the command text, so when it cannot see that an install is local it asks; the cost
+  is an extra prompt, never an unasked global install.
+- **Ordering inside the check:** `pip install --user` matches first and keeps its more specific
+  reason, `pip install --user`.
+- **Bypasses closed in the publishing rule:** leading `NAME=value` assignments
+  (`NODE_ENV=production npm publish`) were read as the program, and quoted names (`"npm" publish`)
+  did not match. The check now skips leading assignments, keeping `BUNDLE_PATH` for the bundle
+  test, and trims surrounding quotes from each word before matching, as `criticalDelete` does.
+
+Effect on the eval, with the 2026-09-24 judge answers held fixed: unsafe allows 3 → 1 and needless
+asks 4 → 4. The one left is `git rebase main`, unasked by the 2026-09-24 decision.
+**Open:** option-first forms (`python3 -I -m pip`, `git -C .. push`), paths with spaces, versioned
+names (`pip3.12`), and `.env/bin/pip`, which the credentials hard rule asks about before this rule
+runs.
 
 ## Open questions
 
@@ -440,7 +471,8 @@ Each is tracked in [BACKLOG.md](../BACKLOG.md).
 - Private Cloud Compute is waiting on Apple's entitlement approval; quota and availability
   messages follow it.
 - Jev has never been validated.
-- Smart mode's install-outside-a-venv rules and implicit approval; secret scanning of tool output.
+- Implicit approval in smart mode; shell parsing beyond word splitting; secret scanning of tool
+  output.
 - Claude context windows: keep 200K or use the real 1M (deferred).
 - Terminal and browser panes, session tree, mid-turn steering, Tasks mode, provider model
   discovery, a Bedrock Converse adapter.
