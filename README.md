@@ -1,5 +1,7 @@
 # emmex
 
+https://github.com/user-attachments/assets/66b798fd-fc1a-4f8c-b13e-6b88efdd20a3
+
 Local-first agent for the Mac, built directly on Apple's Foundation Models framework.
 One session API across the built-in on-device model, Private Cloud Compute, MLX models
 pulled from Hugging Face, and Claude. No Ollama, no LM Studio, no server process: models
