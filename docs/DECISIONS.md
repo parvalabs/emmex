@@ -464,6 +464,18 @@ asks 4 → 4. The one left is `git rebase main`, unasked by the 2026-09-24 decis
 names (`pip3.12`), and `.env/bin/pip`, which the credentials hard rule asks about before this rule
 runs.
 
+### 2026-10-07 · Indigo accent and neutral grays
+
+**Asked (user):** the clay orange accent made emmex look too much like Claude's palette, in the
+app and in the explainer video.
+**Decided:** accent `#4b55d6` in light mode and `#8b93f5` in dark (with dark text on dark-mode
+buttons, since white on the lighter indigo fails contrast). Indigo is cool where clay is warm,
+deeper than macOS system blue so controls don't read as stock, and clear of the red, amber and
+green that already mean error, warning and allowed. Teal was too close to OpenAI's green and plum
+to Apple Intelligence's purple. The warm stone grays went too: neutrals are now plain grays
+(`#1c1c1e` dark background, `#f4f4f5` sidebar), since the beige tint was the other half of the
+Claude look. Only the tokens at the top of `app.css` changed; every component reads them.
+
 ## Open questions
 
 Each is tracked in [BACKLOG.md](../BACKLOG.md).
