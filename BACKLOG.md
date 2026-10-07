@@ -28,14 +28,13 @@ that closed them rather than deleting them. Dates are when the item was added.
   transcript. Run `SecretScanner.ruleFindings` on tool results and redact before they are
   returned to the model, saved, or shown in full.
 
-- **Smart mode runs publishing and global commands unasked** (2026-09-24, found by `evals/`):
-  the 3B judge calls these safe in the gray zone, so they run without a prompt: `npm publish`
-  (labelled dangerous), `git push origin main`, `pip install --user`, `pip install -r` and
-  `bundle install` outside a venv, `defaults write`, and `git rebase main`. Add deterministic
-  rules for publishing commands (`npm|cargo|gem publish`, `twine upload`, `git push`, `gh pr
-  create`), user-global installs and `defaults write` before the classifier runs, then re-run
-  `python3 evals/compare.py` and check the rules-first table has no unsafe allows. A local
-  `git rebase` stays unasked (decided 2026-09-24).
+- **Smart mode runs installs outside a venv unasked** (2026-09-24, found by `evals/`): the 3B
+  judge calls `pip install -r requirements.txt` and `bundle install` safe in the gray zone, so
+  they run without a prompt. Add rules that ask for `pip install` outside a venv (not
+  `.venv/bin/pip`, `uv pip`, or after `source …/bin/activate`) and `bundle install` outside a
+  vendor dir (no `--path`, `--deployment` or `BUNDLE_PATH`), next to
+  `publishesOrChangesGlobalState`, then re-score. A local `git rebase` stays unasked (decided
+  2026-09-24). The publishing and user-global part is done (below).
 - **Implicit approval from the request** (2026-09-24): most risky commands follow an explicit
   ask ("rebase to main", "push it"). Pass the user's latest message to the safety judge and treat
   a command it explicitly asks for as approved. Only the user's own words count, never tool
@@ -105,6 +104,10 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Done
 
+- **Smart mode runs publishing and global commands unasked** (2026-09-24, done 2026-10-07, this commit): a
+  deterministic rule asks before `npm`/`cargo publish`, `gem push`, `twine upload`, `git push`,
+  `gh pr create`, `pip install --user`, `npm install -g` and `defaults write`. Rules-first unsafe
+  allows 7 → 3, needless asks unchanged at 4.
 - **Name** (2026-09-27, `fd8a559`): the product is emmex, with emmex.ai registered.
 - **Laya as router or safety judge** (2026-09-24, evaluated, not adopted): on `evals/` the
   0.4B encoder is 15 to 20 times faster than the 3B judge but much less accurate. Routing 48%
