@@ -156,12 +156,18 @@ public actor PolicyEngine {
         return nil
     }
 
-    /// Publishing (`npm publish`, `git push`, `gh pr create`…), user-global installs, and macOS
-    /// defaults: effects that leave the project, which the 3B judge calls safe. Returns what matched.
+    /// Publishing (`npm publish`, `git push`, `gh pr create`…), user-global installs, installs
+    /// outside a virtualenv or vendor dir, and macOS defaults: effects that leave the project, which
+    /// the 3B judge calls safe. Returns what matched.
     static func publishesOrChangesGlobalState(_ cmd: String) -> String? {
+        var activated = false   // an earlier part ran `source <relative>/bin/activate`
         for part in split(cmd) {
-            var words = stripWrappers(part.split(separator: " ").map(String.init))
+            let raw = part.split(separator: " ").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "\"'")) }   // "npm" → npm
+            var words = stripWrappers(Array(raw.drop(while: isAssignment)))   // NODE_ENV=production npm publish → npm publish
+            let prefix = raw.dropLast(words.count)                            // the assignments and wrappers in front
             guard let head = words.first.map(basename) else { continue }
+            if head == "source" || head == ".", let p = words.dropFirst().first, p.hasSuffix("/bin/activate"), isRelative(p) { activated = true }
+            let exe = words[0]                                                // pip, .venv/bin/pip, or the python running -m pip
             if head.hasPrefix("python"), words.count > 2, words[1] == "-m", words[2] == "pip" { words.removeFirst(2) }   // python3 -m pip … → pip …
             let tool = basename(words[0]), sub = words.count > 1 ? words[1] : ""
             let what = "\(tool) \(sub)"
@@ -171,10 +177,39 @@ public actor PolicyEngine {
             if tool == "git", sub == "push" { return what }
             if tool == "gh", sub == "pr", words.count > 2, words[2] == "create" { return "gh pr create" }
             if ["pip", "pip3"].contains(tool), sub == "install", words.contains("--user") { return "\(what) --user" }
+            if ["pip", "pip3"].contains(tool), sub == "install", !activated, !isVenvExecutable(exe) { return "pip install outside a virtualenv" }
+            if tool == "bundle", sub == "install" || sub.isEmpty {
+                let path = words.firstIndex(of: "--path").flatMap { words.indices.contains($0 + 1) ? words[$0 + 1] : nil }
+                    ?? words.first { $0.hasPrefix("--path=") }.map { String($0.dropFirst("--path=".count)) }
+                    ?? prefix.first { $0.hasPrefix("BUNDLE_PATH=") }.map { String($0.dropFirst("BUNDLE_PATH=".count)) }
+                if !words.contains("--deployment"), !(path.map(isRelative) ?? false) { return "bundle install outside a vendor dir" }
+            }
             if tool == "npm", sub == "install" || sub == "i", words.contains("-g") || words.contains("--global") { return "\(what) --global" }
             if tool == "defaults", sub == "write" { return what }
         }
         return nil
+    }
+
+    /// `NAME=value` in front of a command: a shell variable assignment, not the executable.
+    static func isAssignment(_ w: String) -> Bool {
+        guard let eq = w.firstIndex(of: "="), eq != w.startIndex else { return false }
+        let name = w[..<eq]
+        return !name.first!.isNumber && name.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
+    }
+
+    /// A path relative to the working directory that stays below it: no `/`, `~`, `$` or `..`.
+    /// Quotes are trimmed first, so `--path="/usr/x"` still counts as absolute.
+    static func isRelative(_ p: String) -> Bool {
+        let p = p.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+        return !p.isEmpty && !p.hasPrefix("/") && !p.hasPrefix("~") && !p.hasPrefix("$") && !p.split(separator: "/").contains("..")
+    }
+
+    /// pip or Python in a relative virtualenv's bin directory: `.venv/bin/pip`, `venv/bin/python3`.
+    static func isVenvExecutable(_ p: String) -> Bool {
+        let parts = p.split(separator: "/")
+        return parts.count >= 3 && parts[parts.count - 2] == "bin" && isRelative(p)
+            && [".venv", "venv", ".env", "env"].contains(String(parts[parts.count - 3]))
+            && ["pip", "pip3", "python", "python3"].contains(String(parts.last!))
     }
 
     /// Target of `>`/`>>`/`tee` if any.

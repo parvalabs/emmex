@@ -28,13 +28,6 @@ that closed them rather than deleting them. Dates are when the item was added.
   transcript. Run `SecretScanner.ruleFindings` on tool results and redact before they are
   returned to the model, saved, or shown in full.
 
-- **Smart mode runs installs outside a venv unasked** (2026-09-24, found by `evals/`): the 3B
-  judge calls `pip install -r requirements.txt` and `bundle install` safe in the gray zone, so
-  they run without a prompt. Add rules that ask for `pip install` outside a venv (not
-  `.venv/bin/pip`, `uv pip`, or after `source …/bin/activate`) and `bundle install` outside a
-  vendor dir (no `--path`, `--deployment` or `BUNDLE_PATH`), next to
-  `publishesOrChangesGlobalState`, then re-score. A local `git rebase` stays unasked (decided
-  2026-09-24). The publishing and user-global part is done (below).
 - **Implicit approval from the request** (2026-09-24): most risky commands follow an explicit
   ask ("rebase to main", "push it"). Pass the user's latest message to the safety judge and treat
   a command it explicitly asks for as approved. Only the user's own words count, never tool
@@ -54,7 +47,12 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 - **Shell AST parsing** (2026-09-23): text-based splitting misses `git -C .. push`-style
   evasions; OpenCode uses tree-sitter-bash. Consider a real parser or, cheaper, more opaque
-  patterns that force asking.
+  patterns that force asking. Known misses in `publishesOrChangesGlobalState` (2026-10-07):
+  options before the subcommand (`python3 -I -m pip install`, `git -C .. push`,
+  `npm --global install x`), quoted paths with spaces and other quoting beyond whole-word quotes,
+  versioned names (`pip3.12`, `python3.12`), and virtualenvs not named `.venv`, `venv`, `.env` or
+  `env` (these ask). `.env/bin/pip` is caught first by the credentials hard rule, so a `.env`
+  virtualenv always asks.
 - **MCP tool gating** (2026-09-23): only name heuristics (`write`, `delete`, `run`…). Use
   MCP tool annotations (readOnlyHint / destructiveHint) when servers provide them.
 
@@ -104,7 +102,13 @@ that closed them rather than deleting them. Dates are when the item was added.
 
 ## Done
 
-- **Smart mode runs publishing and global commands unasked** (2026-09-24, done 2026-10-07, this commit): a
+- **Smart mode runs installs outside a venv unasked** (2026-09-24, done 2026-10-07, this commit):
+  `pip install` outside a relative `.venv`/`venv`/`.env`/`env` (or after `source …/bin/activate`)
+  and `bundle install` without `--path <relative>`, `--deployment` or a relative `BUNDLE_PATH`
+  now ask. Leading `NAME=value` assignments and quoted program names no longer hide a publish.
+  Rules-first unsafe allows 3 → 1 (only `git rebase main`, unasked by decision), needless asks
+  unchanged at 4.
+- **Smart mode runs publishing and global commands unasked** (2026-09-24, done 2026-10-07, `f2260ed`): a
   deterministic rule asks before `npm`/`cargo publish`, `gem push`, `twine upload`, `git push`,
   `gh pr create`, `pip install --user`, `npm install -g` and `defaults write`. Rules-first unsafe
   allows 7 → 3, needless asks unchanged at 4.

@@ -101,4 +101,68 @@ import Testing
         await e.recordCreated(script)
         guard case .ask = await e.decide(bash("bash build.sh && npm publish")) else { Issue.record("provenance let a publish through"); return }
     }
+    @Test func leadingAssignmentsDoNotHideAPublish() async {
+        let e = engine(.smart)
+        #expect(await e.decide(bash("NODE_ENV=production npm publish")) == .ask("publishes or changes global state: npm publish"))
+        #expect(await e.decide(bash("CI=1 GIT_TRACE=0 git push origin main")) == .ask("publishes or changes global state: git push"))
+    }
+
+    // Installs outside a virtualenv or vendor dir (BACKLOG: "Smart mode runs installs outside a venv unasked").
+
+    @Test func installsOutsideAVenvOrVendorDirAskInSmartMode() async {
+        let e = engine(.smart)
+        for cmd in ["pip install -r requirements.txt", "pip3 install -r requirements.txt", "python3 -m pip install -r requirements.txt",
+                    "pip install requests", "pip install -e .", "/usr/bin/pip3 install requests",
+                    "bundle install", "bundle", "bundle install --local", "bundle install --path /usr/local/bundle"] {
+            guard case .ask(let why) = await e.decide(bash(cmd)) else { Issue.record("\(cmd) should ask"); continue }
+            #expect(why.hasPrefix("publishes or changes global state"), "\(cmd): \(why)")
+        }
+    }
+    @Test func installRuleIsVisibleInAskMode() async {
+        for cmd in ["pip install -r requirements.txt", "bundle install"] {
+            guard case .ask(let why) = await engine(.ask).decide(bash(cmd)) else { Issue.record("\(cmd) should ask"); continue }
+            #expect(why != "ask mode", "\(cmd)")
+            #expect(!why.hasPrefix("rule:"), "\(cmd)")
+        }
+    }
+    /// Ask mode stops before the classifier, so exactly "ask mode" means no rule fired.
+    @Test func projectLocalInstallsDoNotTriggerTheInstallRule() async {
+        let e = engine(.ask)
+        for cmd in [".venv/bin/pip install -r requirements.txt", "venv/bin/pip install requests", "env/bin/pip install requests",
+                    ".venv/bin/python -m pip install -r requirements.txt", "venv/bin/python3 -m pip install requests",
+                    "env/bin/python -m pip install requests",
+                    "source .venv/bin/activate && pip install -r requirements.txt", ". .venv/bin/activate && pip install -r requirements.txt",
+                    "bundle install --path vendor/bundle", "bundle install --path=vendor/bundle", "bundle install --deployment",
+                    "BUNDLE_PATH=vendor/bundle bundle install", "env BUNDLE_PATH=vendor/bundle bundle install",
+                    "bundle exec rake", "pip list"] {
+            #expect(await e.decide(bash(cmd)) == .ask("ask mode"), "\(cmd)")
+        }
+    }
+    @Test func userInstallKeepsItsMoreSpecificReason() async {
+        #expect(await engine(.smart).decide(bash("pip install --user requests")) == .ask("publishes or changes global state: pip install --user"))
+    }
+    @Test func quotedExecutablesStillMatch() async {
+        let e = engine(.smart)
+        #expect(await e.decide(bash("\"npm\" publish")) == .ask("publishes or changes global state: npm publish"))
+        #expect(await e.decide(bash("'git' push origin main")) == .ask("publishes or changes global state: git push"))
+        #expect(await e.decide(bash("\"/usr/bin/pip3\" install requests")) == .ask("publishes or changes global state: pip install outside a virtualenv"))
+    }
+    /// `.env/bin/pip` never reaches the install rule (the credentials hard rule asks first), so the
+    /// venv names are also checked on the helper itself.
+    @Test func venvExecutablesAreOnlyInVenvStyleDirectories() {
+        for p in [".venv/bin/pip", "venv/bin/pip3", "env/bin/python", ".env/bin/python3", "./.venv/bin/pip"] {
+            #expect(PolicyEngine.isVenvExecutable(p), "\(p)")
+        }
+        for p in ["tools/bin/pip", "scripts/bin/python", "bin/pip", "/usr/bin/pip3", "../venv/bin/pip", "$HOME/venv/bin/pip", ".venv/bin/ruby"] {
+            #expect(!PolicyEngine.isVenvExecutable(p), "\(p)")
+        }
+    }
+    /// Only a virtualenv's bin directory counts as a venv, not any relative path.
+    @Test func relativePathsOutsideAVenvBinStillAsk() async {
+        let e = engine(.smart)
+        for cmd in ["tools/pip install requests", "scripts/python -m pip install requests",
+                    "tools/bin/pip install requests", "scripts/bin/python -m pip install requests"] {
+            #expect(await e.decide(bash(cmd)) == .ask("publishes or changes global state: pip install outside a virtualenv"), "\(cmd)")
+        }
+    }
 }
