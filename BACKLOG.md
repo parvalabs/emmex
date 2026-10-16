@@ -133,7 +133,7 @@ that closed them rather than deleting them. Dates are when the item was added.
   0.4B encoder is 15 to 20 times faster than the 3B judge but much less accurate. Routing 48%
   vs 81%, and it rarely predicts frontier. Safety: 22 unsafe allows vs 8 for the 3B, or 4
   with a yes/no decomposition that asks needlessly on 14 of 26 safe commands.
-- **Memory accounting for KV caches** (2026-10-15): loads and prompt caches now leave a reserve
+- **Memory accounting for KV caches** (2026-10-15, `53c8551`): loads and prompt caches now leave a reserve
   of 8% of RAM, between 3 and 8 GB, for the rest of the system. Evicting a model counts its
   caches as reclaimable, and the sidebar size includes them.
 - **Several MLX prompt caches per model** (2026-10-15, `217e4ed`): switching sessions no longer
