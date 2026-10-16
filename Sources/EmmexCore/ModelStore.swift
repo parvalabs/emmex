@@ -43,6 +43,7 @@ public actor ModelStore {
         self.linked = (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: linkedFile))) ?? [:]
         // Prompt caches shrink when the system runs short, instead of pushing it into swap.
         MLXLanguageModel.promptCacheHeadroom = { Int(SystemMemory.spare()) }
+        PromptCacheFiles.install()
     }
 
     public struct Installed: Sendable, Identifiable {
@@ -118,6 +119,7 @@ public actor ModelStore {
 
     public func remove(_ id: String) async throws {
         if residents.contains(id) { await unload(id) }
+        PromptCacheFiles.remove(modelDirectory: directory(for: id))
         if linked[id] != nil { unregister(id); loaded[id] = nil; return }   // never delete the user's folder
         let dir = directory(for: id), fm = FileManager.default
         try fm.removeItem(at: dir)
@@ -141,8 +143,10 @@ public actor ModelStore {
         let model: MLXLanguageModel
         if let m = loaded[id] { model = m } else {
             let dir = directory(for: id)
+            let configuration = ModelConfiguration(directory: dir)
+            PromptCacheFiles.register(name: configuration.name, modelDirectory: dir)
             model = MLXLanguageModel(
-                configuration: ModelConfiguration(directory: dir),
+                configuration: configuration,
                 capabilities: [.guidedGeneration, .toolCalling, .reasoning],
                 weightsLocation: { _ in dir },
                 load: { _, _ in try await loadModelContainer(from: dir, using: #huggingFaceTokenizerLoader()) })

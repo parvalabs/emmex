@@ -28,3 +28,24 @@ and `remove(modelID:)` drop the model's registry entries. Guided-JSON and requir
 and still prefill everything.
 
 Set `EMMEX_MLX_PROMPT_CACHE=0` to disable reuse.
+
+## Prompt caches on disk (Libraries/MLXFoundationModels)
+
+`PromptCacheDisk.swift` stores prompt caches on disk so a session's prefix survives a model
+unload or an app restart:
+
+- **Blocks:** the cache is cut into 256-token blocks, one safetensors file each. A file holds
+  every layer's keys and values for that block.
+- **Names:** each file is named by a SHA-256 chained over all tokens up to the end of its block,
+  so the same block after a different prefix gets a different name.
+- **Writes:** after each request, `commit` writes the entry's whole blocks that are not on disk
+  yet.
+- **Reads:** `prepare` loads the longest run of stored blocks the prompt begins with, when that
+  beats the best in-memory cache by more than a block.
+- **Pruning:** least recently used files are deleted first, beyond `promptCacheDiskLimit`
+  (default 10 GB). A read refreshes a file's date.
+- **Scope:** only plain attention caches (`KVCacheSimple` on every layer) are stored. Recurrent,
+  rotating and quantized caches stay in memory only.
+
+The host turns it on with `MLXLanguageModel.promptCacheDirectory` (model name → folder). Tests
+are in `Tests/MLXFoundationModelsTests/PromptCacheDiskTests.swift`.

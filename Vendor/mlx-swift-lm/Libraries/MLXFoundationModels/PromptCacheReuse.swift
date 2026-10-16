@@ -15,6 +15,7 @@ final class PromptCacheEntry: @unchecked Sendable {
     var cache: [KVCache] = []
     var tokens: [Int] = []          // the tokens `cache` represents, in order
     var lastUsed: UInt64 = 0
+    var savedBlocks = 0             // leading blocks of `tokens` already on disk
 
     init(cache: [KVCache] = [], tokens: [Int] = []) { self.cache = cache; self.tokens = tokens }
 
@@ -102,6 +103,7 @@ extension MLXLanguageModel {
 /// One request's reconciliation of the rendered prompt with the model's caches: which prefix is
 /// reused, which suffix to feed, and how to update the ledger afterwards.
 struct PromptCacheReuse {
+    let modelID: String
     let entry: PromptCacheEntry
     let cache: [KVCache]
     let input: LMInput
@@ -148,7 +150,7 @@ struct PromptCacheReuse {
         guard PromptCacheRegistry.enabled, input.image == nil, input.video == nil, input.audio == nil,
               input.text.mask == nil, input.text.tokens.ndim == 1 else {
             let cache = try model.newCache(parameters: parameters)
-            return PromptCacheReuse(entry: PromptCacheEntry(cache: cache), cache: cache, input: input, promptTokens: [], cachedCount: 0)
+            return PromptCacheReuse(modelID: modelID, entry: PromptCacheEntry(cache: cache), cache: cache, input: input, promptTokens: [], cachedCount: 0)
         }
         let tokens = input.text.tokens.asArray(Int.self)
         let entries = registry.entries(for: modelID).filter { e in
@@ -159,28 +161,45 @@ struct PromptCacheReuse {
 
         var entry: PromptCacheEntry
         var keep = 0
+        let memoryKeep: Int
         switch plan {
-        case .fresh:
-            entry = PromptCacheEntry(cache: try model.newCache(parameters: parameters))
-        case .extend(let i, let k):
-            entry = entries[i]; keep = k
-            if k < entry.tokens.count { trimPromptCache(entry.cache, numTokens: entry.tokens.count - k) }
-        case .branch(let i, let k):
-            let source = entries[i]
-            entry = PromptCacheEntry(cache: source.cache.map { $0.copy() })
-            trimPromptCache(entry.cache, numTokens: source.tokens.count - k)
-            keep = k
+        case .fresh: memoryKeep = 0
+        case .extend(_, let k), .branch(_, let k): memoryKeep = k
+        }
+        // A longer prefix on disk (after an unload or a restart) beats a shorter one in memory.
+        if let stored = PromptCacheDisk.storedBlocks(tokens, limit: tokens.count - 1, modelID: modelID),
+           stored.hashes.count * PromptCacheDisk.blockSize > memoryKeep + PromptCacheDisk.blockSize,
+           let cache = try? model.newCache(parameters: parameters),
+           PromptCacheDisk.load(stored.hashes, dir: stored.dir, into: cache) {
+            entry = PromptCacheEntry(cache: cache)
+            keep = stored.hashes.count * PromptCacheDisk.blockSize
+            entry.savedBlocks = stored.hashes.count
+        } else {
+            switch plan {
+            case .fresh:
+                entry = PromptCacheEntry(cache: try model.newCache(parameters: parameters))
+            case .extend(let i, let k):
+                entry = entries[i]; keep = k
+                if k < entry.tokens.count { trimPromptCache(entry.cache, numTokens: entry.tokens.count - k) }
+            case .branch(let i, let k):
+                let source = entries[i]
+                entry = PromptCacheEntry(cache: source.cache.map { $0.copy() })
+                trimPromptCache(entry.cache, numTokens: source.tokens.count - k)
+                entry.savedBlocks = source.savedBlocks
+                keep = k
+            }
+            entry.savedBlocks = min(entry.savedBlocks, keep / PromptCacheDisk.blockSize)
         }
         if keep > 0, entry.cache.first?.offset != keep {
             // The trim did not land where the ledger says; start over rather than trust it.
-            if case .extend = plan { registry.drop(entry, modelID: modelID) }
+            registry.drop(entry, modelID: modelID)
             entry = PromptCacheEntry(cache: try model.newCache(parameters: parameters)); keep = 0
         }
         entry.tokens = Array(tokens.prefix(keep))
         registry.touch(entry, modelID: modelID)
         registry.trim(modelID: modelID, keeping: entry)
         let fed = keep > 0 ? LMInput(tokens: MLXArray(Array(tokens[keep...]))) : input
-        return PromptCacheReuse(entry: entry, cache: entry.cache, input: fed, promptTokens: tokens, cachedCount: keep)
+        return PromptCacheReuse(modelID: modelID, entry: entry, cache: entry.cache, input: fed, promptTokens: tokens, cachedCount: keep)
     }
 
     /// After generation: the cache holds the prompt plus whatever the iterator fed (generated
@@ -198,6 +217,7 @@ struct PromptCacheReuse {
         } else {
             entry.tokens = []
         }
+        PromptCacheDisk.save(entry, modelID: modelID)
     }
 
     /// Generation failed or was cancelled part-way: the ledger no longer describes the cache.

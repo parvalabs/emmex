@@ -78,14 +78,13 @@ that closed them rather than deleting them. Dates are when the item was added.
   facts only by ~0.15 cosine; if merges misfire in practice, try an MLX embedding model.
 - **Compaction summaries** (2026-09-22): the 3B model's summaries are shallow; consider
   the frontier model for the fold when the session is already on one.
-- **MLX prompt caches on SSD** (2026-10-15, from oMLX): save evicted prompt caches to
-  `~/.cache/emmex`, keyed by a hash of the model and the token prefix, so reopening a session
-  after an unload or a restart skips the prefill. A 10K-token session costs about a minute to
-  prefill at 170 tok/s.
 - **Prompt caches for hybrid and sliding-window models** (2026-10-15, from oMLX): Qwen3.5
   (GatedDeltaNet) and rotating caches cannot be trimmed, so any edit to the transcript (a dropped
   thinking block, compaction) prefills everything again. Snapshot recurrent state at message
   boundaries and roll back to the last snapshot.
+- **Background writes for disk prompt caches** (2026-10-16): writing blocks costs about 2 s per
+  4.4K new tokens on the inference thread after each response. Convert to bytes there and write
+  on a background queue, as oMLX does.
 - **GPU keep-warm and MTP** (2026-10-15, from oMLX): measure whether a tiny kernel between turns
   removes the GPU wake-up stall on this Mac. Upstream mlx-swift-lm also ships an MTP drafter for
   Qwen3.5 that the FoundationModels adapter does not use yet.

@@ -50,7 +50,8 @@ To check the real app: launch a copy with `open -n .build/Emmex.app --env KEY=va
 the binary directly opens no window. Useful variables: `EMMEX_WORKSPACE`, `EMMEX_PORT`,
 `EMMEX_WEB_ROOT`, `EMMEX_AUTOPROMPT`, `EMMEX_DEBUG` (logs to stderr), `EMMEX_USAGE` and
 `EMMEX_AUDIT` (CLI), `EMMEX_SANDBOX_DEBUG` (prints the Seatbelt profile),
-`EMMEX_MLX_PROMPT_CACHE=0` (disables KV-cache reuse).
+`EMMEX_MLX_PROMPT_CACHE=0` (disables KV-cache reuse), `EMMEX_MLX_DISK_CACHE=0` (keeps prompt
+caches off disk; `EMMEX_MLX_DISK_CACHE_DIR` moves them, e.g. to a scratch folder for tests).
 
 ## Testing without harming real data
 

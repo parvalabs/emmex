@@ -542,6 +542,41 @@ about 280% CPU during every run above. With it stopped, Qwen3-8B prefills 143-17
 token. The table above was measured under that load: its ratios hold, its absolute times are
 about 2.5 times too slow.
 
+### 2026-10-16 · MLX prompt caches on disk
+
+**Asked (user):** implement the SSD tier from the oMLX list.
+**Decided:** after each turn, write the KV cache to `~/.cache/emmex/prompt-cache` in 256-token
+blocks, one safetensors file each. Each file is named by a SHA-256 chained over every token up
+to the end of its block, so a turn writes only its new blocks. When the best in-memory match is
+shorter, the longest stored run of blocks that the prompt begins with is loaded instead of
+prefilled.
+
+- Each model has its own folder, keyed by a signature of `config.json` and the weight files'
+  names, sizes and dates, so replaced weights never load a stale cache.
+- Removing a model deletes its folder.
+- Least recently used files go first beyond 10 GB (`EMMEX_MLX_DISK_CACHE_GB`); a read refreshes a
+  file's date. `EMMEX_MLX_DISK_CACHE=0` turns the tier off.
+
+Unlike oMLX, there is no RAM block pool and no background writer: the in-memory caches stay as
+they were, and writes happen on the inference thread once the response is done.
+
+Only plain attention caches are stored. Qwen3.5's recurrent state cannot be cut into blocks; that
+waits on boundary snapshots.
+
+Measured with `spike-mlx` (`EMMEX_MODE=restore`), Qwen3-8B 4-bit, a 4.4K-token first turn, then
+a 1.1K-token second turn:
+
+| Case | Disk tier off | On |
+|---|---|---|
+| First turn (writes 17 blocks) | 25.4 s | 27.3 s |
+| Next turn after the model is unloaded (weights reload) | 34.2 s | 9.9 s |
+| First turn after a restart | 25.4 s | 0.7 s |
+| Second turn after a restart and an unload | 34.2 s | 2.6 s |
+
+A 256-token block takes 36 MB on this model (about 147 KB per token), so 10 GB holds about 70K
+tokens. Writing costs about 2 s for 4.4K tokens. A background writer would hide that, as oMLX's
+does.
+
 ## Open questions
 
 Each is tracked in [BACKLOG.md](../BACKLOG.md).
