@@ -536,9 +536,11 @@ prompt caches out of what evicting a model frees. Now:
 A cache budget reserved at load time, the alternative, would have held back 2.6 GB per model on
 this 26 GB Mac whether or not it was used.
 
-**Found while measuring:** prefill really is slow here, at 62-69 tok/s with measured token
-counts, but a stuck Sublime Text crash handler used about 280% CPU during every run so far. The
-rerun is in BACKLOG.md.
+**Found while measuring:** the 62-69 tok/s prefill was a stuck Sublime Text crash handler using
+about 280% CPU during every run above. With it stopped, Qwen3-8B prefills 143-173 tok/s again
+(the 2026-09-24 figure was 170), and switching back to a session takes about 10 s to the first
+token. The table above was measured under that load: its ratios hold, its absolute times are
+about 2.5 times too slow.
 
 ## Open questions
 
