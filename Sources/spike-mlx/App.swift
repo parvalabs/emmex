@@ -41,6 +41,24 @@ import EmmexCore
                 })
             _ = try await LanguageModelSession(model: model).respond(to: "Say ok.", options: GenerationOptions(maximumResponseTokens: 4))
             print("model load + warmup: \(Int(Date().timeIntervalSince(t0)))s")
+            if Env.value("EMMEX_MODE") == "restore" {
+                // Prompt caches on disk: one turn, unload the model, the next turn. Run twice to
+                // see a restart (the second run's first turn loads from disk).
+                PromptCacheFiles.install()
+                PromptCacheFiles.register(name: ModelConfiguration(directory: modelDir).name, modelDirectory: modelDir)
+                let text = (1...150).map { "Preamble note \($0): the build of module \($0 % 17) passed after step \($0 * 3)." }.joined(separator: "\n")
+                let session = LanguageModelSession(model: model, instructions: "You are a coding assistant. Reference material follows.\n" + text)
+                func turn(_ label: String, _ n: Int) async throws {
+                    let prompt = (1...60).map { "Turn \(n) note \($0): module \($0 % 17) passed after step \($0 * 3)." }.joined(separator: "\n") + "\nReply with exactly: OK"
+                    let t = Date()
+                    let r = try await session.respond(to: prompt, options: GenerationOptions(maximumResponseTokens: 8))
+                    print("\(label): \(String(format: "%.2f", Date().timeIntervalSince(t)))s  prompt \(r.usage.input.totalTokenCount) (cached \(r.usage.input.cachedTokenCount))")
+                }
+                try await turn("turn 1", 1)
+                await model.evict()
+                try await turn("turn 2 after unload (includes weight reload)", 2)
+                return
+            }
             if Env.value("EMMEX_MODE") == "switch" {
                 // Time to first token while alternating between sessions that share a long
                 // preamble (like emmex's system prompt) and each grow their own history.
