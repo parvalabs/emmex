@@ -53,11 +53,12 @@ import EmmexCore
                 for (i, s) in [0, 1, 0, 1, 0, 1].enumerated() {
                     turn[s] += 1
                     let prompt = filler("Session \(["A", "B"][s]) turn \(turn[s])", lines: 60) + "\nReply with exactly: OK"
-                    let t = Date(); var first: Double?
-                    for try await _ in sessions[s].streamResponse(to: prompt, options: GenerationOptions(maximumResponseTokens: 8)) {
-                        if first == nil { first = Date().timeIntervalSince(t) }
-                    }
-                    print("step \(i + 1) session \(["A", "B"][s]) turn \(turn[s]): first token \(String(format: "%.2f", first ?? -1))s  total \(String(format: "%.2f", Date().timeIntervalSince(t)))s")
+                    // An 8-token reply makes the total almost all prefill.
+                    let t = Date()
+                    let r = try await sessions[s].respond(to: prompt, options: GenerationOptions(maximumResponseTokens: 8))
+                    let secs = Date().timeIntervalSince(t)
+                    let cached = r.usage.input.cachedTokenCount, fed = r.usage.input.totalTokenCount - cached
+                    print("step \(i + 1) session \(["A", "B"][s]) turn \(turn[s]): \(String(format: "%.2f", secs))s  prompt \(r.usage.input.totalTokenCount) (cached \(cached), fed \(fed))  => \(String(format: "%.0f", Double(fed) / secs)) tok/s")
                 }
                 return
             }
