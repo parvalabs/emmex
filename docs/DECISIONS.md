@@ -499,7 +499,7 @@ the shared system prompt. Switching back then prefilled that session's whole his
 **Decided (user):** start with several caches per model. Each request extends the cache that
 shares the longest prefix. On a partial match it branches from a trimmed copy, so the other
 session's cache survives. Caches are evicted least recently used first: at most 4 per model, and
-at most 10% of RAM per model (1 GB minimum).
+at most 10% of RAM per model (1 GB minimum) (`217e4ed`).
 
 Measured with `spike-mlx` (`EMMEX_MODE=switch`): Qwen3-8B 4-bit, two sessions sharing a 3K-token
 preamble, alternating turns that each add about 1.4K tokens, reasoning off. Time to the first
