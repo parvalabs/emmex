@@ -2,6 +2,7 @@
 // Weights are pre-downloaded into ~/.cache/emmex/models/<org>/<name> (plain HF file layout).
 import Foundation
 import FoundationModels
+import MLX
 import MLXFoundationModels
 import MLXHuggingFace
 import MLXLMCommon
@@ -41,6 +42,32 @@ import EmmexCore
                 })
             _ = try await LanguageModelSession(model: model).respond(to: "Say ok.", options: GenerationOptions(maximumResponseTokens: 4))
             print("model load + warmup: \(Int(Date().timeIntervalSince(t0)))s")
+            if Env.value("EMMEX_MODE") == "warm" {
+                // Does the GPU parking after idle slow the next turn, and does a tiny kernel
+                // every 500 ms during the gap prevent it? Short cached turns isolate the stall.
+                let session = LanguageModelSession(model: model, instructions: "You are terse.")
+                func turn() async throws -> Double {
+                    let t = Date()
+                    _ = try await session.respond(to: "Reply with exactly: OK", options: GenerationOptions(maximumResponseTokens: 4))
+                    return Date().timeIntervalSince(t)
+                }
+                _ = try await turn()
+                for gap in [0.0, 2, 6, 15] {
+                    for warm in [false, true] {
+                        var times: [Double] = []
+                        for _ in 0 ..< 3 {
+                            let end = Date().addingTimeInterval(gap)
+                            while Date() < end {
+                                if warm { eval(MLXArray.ones([16]) + 1) }
+                                try await Task.sleep(for: .milliseconds(warm ? 500 : 100))
+                            }
+                            times.append(try await turn())
+                        }
+                        print("gap \(Int(gap))s warm=\(warm): " + times.map { String(format: "%.3f", $0) }.joined(separator: " "))
+                    }
+                }
+                return
+            }
             if Env.value("EMMEX_MODE") == "restore" {
                 // Prompt caches on disk: one turn, unload the model, the next turn. Run twice to
                 // see a restart (the second run's first turn loads from disk).

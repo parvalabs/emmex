@@ -85,12 +85,9 @@ that closed them rather than deleting them. Dates are when the item was added.
 - **Background writes for disk prompt caches** (2026-10-16): writing blocks costs about 2 s per
   4.4K new tokens on the inference thread after each response. Convert to bytes there and write
   on a background queue, as oMLX does.
-- **GPU keep-warm and MTP** (2026-10-15, from oMLX): measure whether a tiny kernel between turns
-  removes the GPU wake-up stall on this Mac. Upstream mlx-swift-lm also ships an MTP drafter for
-  Qwen3.5 that the FoundationModels adapter does not use yet.
-
-## App
-
+- **MTP speculative decoding** (2026-10-15, from oMLX): upstream mlx-swift-lm ships an MTP drafter
+  for Qwen3.5 that the FoundationModels adapter does not use yet. Decode runs about 18 tok/s on
+  this M4.
 - **Untested paths** (2026-09-28): the native folder picker in Add from folder (only the typed-path
   version was tested), and Gemini through Google's OpenAI-compatible endpoint (no key yet).
 
@@ -130,6 +127,9 @@ that closed them rather than deleting them. Dates are when the item was added.
 - **MLX prompt caches on SSD** (2026-10-15, done 2026-10-16, `ee32f50`): 256-token blocks under
   `~/.cache/emmex/prompt-cache`. On Qwen3-8B the first turn after a restart takes 0.7 s instead
   of 25.4 s, and the next turn after an unload 9.9 s instead of 34.2 s.
+- **GPU keep-warm** (2026-10-15, measured 2026-10-16, not adopted): the idle stall on this M4 is
+  about 60 ms with Qwen3-8B, and a 500 ms kernel tick does not remove it
+  (`EMMEX_MODE=warm spike-mlx`).
 - **Slow prefill** (2026-10-15, no code change): 62-69 tok/s was a stuck Sublime Text crash
   handler at about 280% CPU. With it stopped, Qwen3-8B prefills 143-173 tok/s again.
 - **Memory accounting for KV caches** (2026-10-15, `53c8551`): loads and prompt caches now leave a reserve

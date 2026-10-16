@@ -577,6 +577,16 @@ A 256-token block takes 36 MB on this model (about 147 KB per token), so 10 GB h
 tokens. Writing costs about 2 s for 4.4K tokens. A background writer would hide that, as oMLX's
 does.
 
+### 2026-10-16 · GPU keep-warm: measured, not adopted
+
+**Asked (user):** try oMLX's keep-warm, a tiny GPU kernel between turns so the GPU never parks.
+**Found:** `spike-mlx` (`EMMEX_MODE=warm`) times a short cached turn on Qwen3-8B after an idle
+gap, three runs each. With no gap a turn takes 0.30 s. After 2, 6 or 15 s idle it takes 0.35-0.37
+s, whether or not a kernel runs every 500 ms during the gap. oMLX measured 1.0-1.7 s on an M5
+Ultra with a 156 GB model; on this M4 with an 8B model the stall is about 60 ms, and keep-warm
+does not remove it.
+**Decided:** not adopted. The benchmark stays, to rerun on bigger machines or models.
+
 ## Open questions
 
 Each is tracked in [BACKLOG.md](../BACKLOG.md).
