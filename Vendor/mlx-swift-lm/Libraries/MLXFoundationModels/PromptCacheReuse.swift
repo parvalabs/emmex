@@ -1,5 +1,6 @@
-// emmex patch: keep the KV cache between requests so a growing transcript only
-// prefills its new tail. See EMMEX-PATCHES.md at the package root.
+// emmex patch: keep KV caches between requests so a growing transcript only prefills its new
+// tail, and keep several per model so switching between sessions doesn't throw away the
+// other session's prefix. See EMMEX-PATCHES.md at the package root.
 
 #if FoundationModelsIntegration
 #if canImport(FoundationModels, _version: 2)
@@ -8,32 +9,74 @@ import Foundation
 import MLX
 import MLXLMCommon
 
-/// The cache one model carries between requests. Touched only inside the model container's
-/// `perform`, which serializes generation per model, so no lock of its own.
+/// One cached conversation prefix. Touched only inside the model container's `perform`, which
+/// serializes generation per model, so no lock of its own.
 final class PromptCacheEntry: @unchecked Sendable {
     var cache: [KVCache] = []
     var tokens: [Int] = []          // the tokens `cache` represents, in order
+    var lastUsed: UInt64 = 0
+
+    init(cache: [KVCache] = [], tokens: [Int] = []) { self.cache = cache; self.tokens = tokens }
+
+    /// The ledger is trustworthy only when the cache holds exactly its tokens.
+    var isConsistent: Bool { !tokens.isEmpty && cache.first?.offset == tokens.count }
+
+    /// Approximate memory held by the cache arrays.
+    var bytes: Int { cache.reduce(0) { $0 + $1.state.reduce(0) { $0 + $1.nbytes } } }
 }
 
-/// Process-wide registry of per-model prompt caches.
+/// Process-wide registry of prompt caches, several per model, evicted least recently used
+/// first when a model exceeds the entry count or byte budget.
 final class PromptCacheRegistry: @unchecked Sendable {
     static let shared = PromptCacheRegistry()
     private let lock = NSLock()
-    private var entries: [String: PromptCacheEntry] = [:]
+    private var entries: [String: [PromptCacheEntry]] = [:]
+    private var clock: UInt64 = 0
 
+    private static let env = ProcessInfo.processInfo.environment
     /// `EMMEX_MLX_PROMPT_CACHE=0` turns reuse off (every request prefills everything).
-    static let enabled: Bool = ProcessInfo.processInfo.environment["EMMEX_MLX_PROMPT_CACHE"] != "0"
+    static let enabled: Bool = env["EMMEX_MLX_PROMPT_CACHE"] != "0"
+    /// Cached prefixes kept per model (`EMMEX_MLX_PROMPT_CACHES`, default 4).
+    static let maxEntries: Int = env["EMMEX_MLX_PROMPT_CACHES"].flatMap(Int.init).map { max(1, $0) } ?? 4
+    /// Bytes all of one model's caches may hold (`EMMEX_MLX_PROMPT_CACHE_MB`, default 10% of RAM,
+    /// at least 1 GB). The entry in use is kept even when it alone is over budget.
+    static let maxBytes: Int = env["EMMEX_MLX_PROMPT_CACHE_MB"].flatMap(Int.init).map { $0 << 20 }
+        ?? max(1 << 30, Int(ProcessInfo.processInfo.physicalMemory / 10))
 
-    func entry(for modelID: String) -> PromptCacheEntry {
+    func entries(for modelID: String) -> [PromptCacheEntry] {
         lock.lock(); defer { lock.unlock() }
-        if let e = entries[modelID] { return e }
-        let e = PromptCacheEntry(); entries[modelID] = e; return e
+        return entries[modelID] ?? []
     }
+
+    /// Mark `entry` most recently used, registering it if new.
+    func touch(_ entry: PromptCacheEntry, modelID: String) {
+        lock.lock(); defer { lock.unlock() }
+        clock += 1; entry.lastUsed = clock
+        if !(entries[modelID] ?? []).contains(where: { $0 === entry }) { entries[modelID, default: []].append(entry) }
+    }
+
+    func drop(_ entry: PromptCacheEntry, modelID: String) {
+        lock.lock(); defer { lock.unlock() }
+        entries[modelID]?.removeAll { $0 === entry }
+    }
+
+    /// Evict least recently used entries other than `keeping` until the model is within budget.
+    func trim(modelID: String, keeping: PromptCacheEntry, maxEntries: Int = maxEntries, maxBytes: Int = maxBytes) {
+        lock.lock(); defer { lock.unlock() }
+        var list = (entries[modelID] ?? []).sorted { $0.lastUsed < $1.lastUsed }
+        var total = list.reduce(0) { $0 + $1.bytes }
+        while list.count > 1, list.count > maxEntries || total > maxBytes,
+              let i = list.firstIndex(where: { $0 !== keeping }) {
+            total -= list.remove(at: i).bytes
+        }
+        entries[modelID] = list
+    }
+
     func remove(_ modelID: String) { lock.lock(); entries[modelID] = nil; lock.unlock() }
     func removeAll() { lock.lock(); entries.removeAll(); lock.unlock() }
 }
 
-/// One request's reconciliation of the rendered prompt with the model's cache: which prefix is
+/// One request's reconciliation of the rendered prompt with the model's caches: which prefix is
 /// reused, which suffix to feed, and how to update the ledger afterwards.
 struct PromptCacheReuse {
     let entry: PromptCacheEntry
@@ -42,39 +85,79 @@ struct PromptCacheReuse {
     let promptTokens: [Int]
     let cachedCount: Int
 
-    /// Decide what to reuse. Text-only, rank-1, unmasked prompts qualify; anything else gets a
-    /// fresh cache and feeds the whole prompt (the previous behavior).
-    static func prepare(modelID: String, input: LMInput, model: any LanguageModel, parameters: GenerateParameters) throws -> PromptCacheReuse {
-        let entry = PromptCacheRegistry.shared.entry(for: modelID)
-        func fresh() throws -> PromptCacheReuse {
-            let cache = try model.newCache(parameters: parameters)
-            entry.cache = cache; entry.tokens = []
-            return PromptCacheReuse(entry: entry, cache: cache, input: input, promptTokens: [], cachedCount: 0)
-        }
-        guard PromptCacheRegistry.enabled, input.image == nil, input.video == nil, input.audio == nil,
-              input.text.mask == nil, input.text.tokens.ndim == 1 else { return try fresh() }
-        let tokens = input.text.tokens.asArray(Int.self)
-        guard !entry.cache.isEmpty, !entry.tokens.isEmpty, tokens.count > 1 else {
-            let r = try fresh(); return PromptCacheReuse(entry: entry, cache: r.cache, input: input, promptTokens: tokens, cachedCount: 0)
-        }
-        // The cache must hold exactly the ledger, or we cannot trust either.
-        guard let offset = entry.cache.first?.offset, offset == entry.tokens.count else { return try withPrompt(fresh(), tokens) }
-        let common = zip(tokens, entry.tokens).prefix { $0 == $1 }.count
-        // Always feed at least the last token so the model has something to sample from.
-        let keep = min(common, tokens.count - 1)
-        guard keep > 0 else { return try withPrompt(fresh(), tokens) }
-        if keep < entry.tokens.count {
-            guard canTrimPromptCache(entry.cache) else { return try withPrompt(fresh(), tokens) }
-            _ = trimPromptCache(entry.cache, numTokens: entry.tokens.count - keep)
-            guard entry.cache.first?.offset == keep else { return try withPrompt(fresh(), tokens) }
-        }
-        entry.tokens = Array(tokens.prefix(keep))
-        let suffix = LMInput(tokens: MLXArray(Array(tokens[keep...])))
-        return PromptCacheReuse(entry: entry, cache: entry.cache, input: suffix, promptTokens: tokens, cachedCount: keep)
+    /// What to do with the cached entries for a prompt.
+    enum Plan: Equatable {
+        case fresh
+        /// Extend entry `index` in place: it is a prefix of the prompt (after trimming `trim`
+        /// tokens, which only happens when nothing else would be lost).
+        case extend(index: Int, keep: Int)
+        /// Copy entry `index` trimmed to `keep` tokens, leaving the original for its session.
+        case branch(index: Int, keep: Int)
     }
 
-    private static func withPrompt(_ r: PromptCacheReuse, _ tokens: [Int]) -> PromptCacheReuse {
-        PromptCacheReuse(entry: r.entry, cache: r.cache, input: r.input, promptTokens: tokens, cachedCount: 0)
+    /// Choose the entry sharing the longest prefix with `tokens`. An entry that is wholly a
+    /// prefix is extended in place; a partial match is copied when its cache can be trimmed, so
+    /// the other session's tail survives.
+    static func plan(tokens: [Int], cached: [(tokens: [Int], trimmable: Bool)]) -> Plan {
+        guard tokens.count > 1 else { return .fresh }
+        var best: (index: Int, common: Int)?
+        for (i, c) in cached.enumerated() {
+            let common = zip(tokens, c.tokens).prefix { $0 == $1 }.count
+            if common > (best?.common ?? 0) { best = (i, common) }
+        }
+        guard let best else { return .fresh }
+        // Always feed at least the last token so the model has something to sample from.
+        let keep = min(best.common, tokens.count - 1)
+        guard keep > 0 else { return .fresh }
+        let c = cached[best.index]
+        if keep == c.tokens.count { return .extend(index: best.index, keep: keep) }
+        guard c.trimmable else { return .fresh }
+        // The prompt repeats the whole entry but must feed its last token again: trimming one
+        // token loses nothing another session needs.
+        if best.common == c.tokens.count { return .extend(index: best.index, keep: keep) }
+        return .branch(index: best.index, keep: keep)
+    }
+
+    /// Decide what to reuse. Text-only, rank-1, unmasked prompts qualify; anything else gets a
+    /// fresh, unregistered cache and feeds the whole prompt.
+    static func prepare(modelID: String, input: LMInput, model: any LanguageModel, parameters: GenerateParameters) throws -> PromptCacheReuse {
+        let registry = PromptCacheRegistry.shared
+        guard PromptCacheRegistry.enabled, input.image == nil, input.video == nil, input.audio == nil,
+              input.text.mask == nil, input.text.tokens.ndim == 1 else {
+            let cache = try model.newCache(parameters: parameters)
+            return PromptCacheReuse(entry: PromptCacheEntry(cache: cache), cache: cache, input: input, promptTokens: [], cachedCount: 0)
+        }
+        let tokens = input.text.tokens.asArray(Int.self)
+        let entries = registry.entries(for: modelID).filter { e in
+            if !e.isConsistent { registry.drop(e, modelID: modelID) }
+            return e.isConsistent
+        }
+        let plan = plan(tokens: tokens, cached: entries.map { ($0.tokens, canTrimPromptCache($0.cache)) })
+
+        var entry: PromptCacheEntry
+        var keep = 0
+        switch plan {
+        case .fresh:
+            entry = PromptCacheEntry(cache: try model.newCache(parameters: parameters))
+        case .extend(let i, let k):
+            entry = entries[i]; keep = k
+            if k < entry.tokens.count { trimPromptCache(entry.cache, numTokens: entry.tokens.count - k) }
+        case .branch(let i, let k):
+            let source = entries[i]
+            entry = PromptCacheEntry(cache: source.cache.map { $0.copy() })
+            trimPromptCache(entry.cache, numTokens: source.tokens.count - k)
+            keep = k
+        }
+        if keep > 0, entry.cache.first?.offset != keep {
+            // The trim did not land where the ledger says; start over rather than trust it.
+            if case .extend = plan { registry.drop(entry, modelID: modelID) }
+            entry = PromptCacheEntry(cache: try model.newCache(parameters: parameters)); keep = 0
+        }
+        entry.tokens = Array(tokens.prefix(keep))
+        registry.touch(entry, modelID: modelID)
+        registry.trim(modelID: modelID, keeping: entry)
+        let fed = keep > 0 ? LMInput(tokens: MLXArray(Array(tokens[keep...]))) : input
+        return PromptCacheReuse(entry: entry, cache: entry.cache, input: fed, promptTokens: tokens, cachedCount: keep)
     }
 
     /// After generation: the cache holds the prompt plus whatever the iterator fed (generated

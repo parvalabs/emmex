@@ -476,6 +476,54 @@ to Apple Intelligence's purple. The warm stone grays went too: neutrals are now 
 (`#1c1c1e` dark background, `#f4f4f5` sidebar), since the beige tint was the other half of the
 Claude look. Only the tokens at the top of `app.css` changed; every component reads them.
 
+### 2026-10-15 · Ideas from oMLX, and several prompt caches per model
+
+**Asked (user):** what emmex can reuse, as ideas rather than code, from oMLX
+(github.com/jundot/omlx), a Python MLX server for Apple Silicon.
+**Found:** oMLX keeps its KV cache in 256-token blocks, content-hashed and chained on the
+previous block's hash, so every session and request shares prefixes. Its other ideas:
+
+- a cold tier on SSD that survives restarts;
+- snapshots of recurrent and sliding-window state at block boundaries, for caches that cannot be
+  trimmed;
+- memory ceilings that leave a reserve for the rest of the system and evict models before the
+  machine swaps;
+- `clear_cache` delayed after each request;
+- a GPU keep-warm tick, since Apple GPUs park after about 1 s idle;
+- an adaptive draft depth for MTP speculative decoding;
+- continuous batching, Neural Engine prefill on private APIs, and kernels for single model
+  families.
+
+emmex kept one cache per model, so a second session on the same model trimmed the first back to
+the shared system prompt. Switching back then prefilled that session's whole history again.
+**Decided (user):** start with several caches per model. Each request extends the cache that
+shares the longest prefix. On a partial match it branches from a trimmed copy, so the other
+session's cache survives. Caches are evicted least recently used first: at most 4 per model, and
+at most 10% of RAM per model (1 GB minimum).
+
+Measured with `spike-mlx` (`EMMEX_MODE=switch`): Qwen3-8B 4-bit, two sessions sharing a 3K-token
+preamble, alternating turns that each add about 1.4K tokens, reasoning off. Time to the first
+token on each switch back:
+
+| Switch | No cache | One cache (before) | Several (after) |
+|---|---|---|---|
+| A, turn 2 | 94 s | 47 s | 25 s |
+| B, turn 2 | 94 s | 47 s | 24 s |
+| A, turn 3 | 111 s | 72 s | 26 s |
+| B, turn 3 | 111 s | 72 s | 26 s |
+
+Before, it grew with each session's history; after, it stays at the cost of the new turn. Prefill
+ran at about 60 tok/s here, against 170 tok/s measured on 2026-09-24. That is worth checking
+separately.
+
+Not adopted:
+- continuous batching, because emmex has one user;
+- Neural Engine prefill, because it uses private APIs;
+- kernels for single model families.
+
+The SSD tier, boundary snapshots, memory accounting that counts KV caches, keep-warm and MTP are
+in BACKLOG.md.
+
 ## Open questions
 
 Each is tracked in [BACKLOG.md](../BACKLOG.md).
