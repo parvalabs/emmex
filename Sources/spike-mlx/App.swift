@@ -41,6 +41,26 @@ import EmmexCore
                 })
             _ = try await LanguageModelSession(model: model).respond(to: "Say ok.", options: GenerationOptions(maximumResponseTokens: 4))
             print("model load + warmup: \(Int(Date().timeIntervalSince(t0)))s")
+            if Env.value("EMMEX_MODE") == "switch" {
+                // Time to first token while alternating between sessions that share a long
+                // preamble (like emmex's system prompt) and each grow their own history.
+                func filler(_ tag: String, lines: Int) -> String {
+                    (1...lines).map { "\(tag) note \($0): the build of module \($0 % 17) passed after step \($0 * 3)." }.joined(separator: "\n")
+                }
+                let preamble = "You are a coding assistant. Reference material follows.\n" + filler("Preamble", lines: 150)
+                let sessions = ["A", "B"].map { LanguageModelSession(model: model, instructions: preamble + "\nYou are session \($0).") }
+                var turn = [0, 0]
+                for (i, s) in [0, 1, 0, 1, 0, 1].enumerated() {
+                    turn[s] += 1
+                    let prompt = filler("Session \(["A", "B"][s]) turn \(turn[s])", lines: 60) + "\nReply with exactly: OK"
+                    let t = Date(); var first: Double?
+                    for try await _ in sessions[s].streamResponse(to: prompt, options: GenerationOptions(maximumResponseTokens: 8)) {
+                        if first == nil { first = Date().timeIntervalSince(t) }
+                    }
+                    print("step \(i + 1) session \(["A", "B"][s]) turn \(turn[s]): first token \(String(format: "%.2f", first ?? -1))s  total \(String(format: "%.2f", Date().timeIntervalSince(t)))s")
+                }
+                return
+            }
             if Env.value("EMMEX_MODE") == "bench" {
                 func bench(_ label: String, tools: [any FoundationModels.Tool], reasoning: ContextOptions.ReasoningLevel? = nil) async throws {
                     let s = LanguageModelSession(model: model, tools: tools, instructions: "You are a helpful assistant.")

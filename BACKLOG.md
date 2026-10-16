@@ -78,6 +78,22 @@ that closed them rather than deleting them. Dates are when the item was added.
   facts only by ~0.15 cosine; if merges misfire in practice, try an MLX embedding model.
 - **Compaction summaries** (2026-09-22): the 3B model's summaries are shallow; consider
   the frontier model for the fold when the session is already on one.
+- **MLX prompt caches on SSD** (2026-10-15, from oMLX): save evicted prompt caches to
+  `~/.cache/emmex`, keyed by a hash of the model and the token prefix, so reopening a session
+  after an unload or a restart skips the prefill. A 10K-token session costs about a minute to
+  prefill at 170 tok/s.
+- **Prompt caches for hybrid and sliding-window models** (2026-10-15, from oMLX): Qwen3.5
+  (GatedDeltaNet) and rotating caches cannot be trimmed, so any edit to the transcript (a dropped
+  thinking block, compaction) prefills everything again. Snapshot recurrent state at message
+  boundaries and roll back to the last snapshot.
+- **Memory accounting for KV caches** (2026-10-15, from oMLX): `ModelStore.needed` counts only
+  the weights (×1.15). Count resident prompt caches too, and leave a reserve for the rest of the
+  system, as oMLX's ceilings do (8% of RAM, between 3 and 8 GB, by default).
+- **GPU keep-warm and MTP** (2026-10-15, from oMLX): measure whether a tiny kernel between turns
+  removes the GPU wake-up stall on this Mac. Upstream mlx-swift-lm also ships an MTP drafter for
+  Qwen3.5 that the FoundationModels adapter does not use yet.
+- **Slow prefill** (2026-10-15): the session-switch benchmark prefilled about 60 tok/s on
+  Qwen3-8B, against 170 tok/s measured on 2026-09-24. Find out why.
 
 ## App
 
@@ -117,6 +133,9 @@ that closed them rather than deleting them. Dates are when the item was added.
   0.4B encoder is 15 to 20 times faster than the 3B judge but much less accurate. Routing 48%
   vs 81%, and it rarely predicts frontier. Safety: 22 unsafe allows vs 8 for the 3B, or 4
   with a yes/no decomposition that asks needlessly on 14 of 26 safe commands.
+- **Several MLX prompt caches per model** (2026-10-15, `217e4ed`): switching sessions no longer
+  discards the other session's cache. Qwen3-8B, switching back after 1.4K-token turns: first
+  token 47-72 s → 25 s.
 - **MLX model residency** (2026-09-24, `0152402`): several models stay loaded with LRU eviction;
   sidebar list, per-model unload, loaded tags in the picker, loading state on the model chip.
 - **KV-cache reuse for MLX turns** (2026-09-24, `71b6820`): vendored mlx-swift-lm with a prefix-cache
