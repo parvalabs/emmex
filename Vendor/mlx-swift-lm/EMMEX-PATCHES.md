@@ -19,7 +19,9 @@ feeds only the suffix:
 
 Caches are evicted least recently used first, beyond 4 per model (`EMMEX_MLX_PROMPT_CACHES`) or
 beyond 10% of RAM per model, at least 1 GB (`EMMEX_MLX_PROMPT_CACHE_MB`). The cache in use is
-never evicted. Tests: `Tests/MLXFoundationModelsTests/PromptCacheReuseTests.swift`. Patched sites in `MLXLanguageModel.swift` are marked
+never evicted. When the host sets `MLXLanguageModel.promptCacheHeadroom` (emmex: available memory
+minus a reserve), caches stop growing once it reaches zero and shrink to the one in use below it.
+`MLXLanguageModel.promptCacheBytes` reports one model's total. Tests: `Tests/MLXFoundationModelsTests/PromptCacheReuseTests.swift`. Patched sites in `MLXLanguageModel.swift` are marked
 `// emmex patch`: `runAllowedToolGeneration`, `runUnconstrained`, `runReasoning`, and the usage
 emission in each so reported prompt tokens still count the whole prompt. `ModelCache.evictAll`
 and `remove(modelID:)` drop the model's registry entries. Guided-JSON and required-tool paths are untouched

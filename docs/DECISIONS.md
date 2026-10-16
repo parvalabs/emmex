@@ -521,8 +521,24 @@ Not adopted:
 - Neural Engine prefill, because it uses private APIs;
 - kernels for single model families.
 
-The SSD tier, boundary snapshots, memory accounting that counts KV caches, keep-warm and MTP are
-in BACKLOG.md.
+The SSD tier, boundary snapshots, keep-warm and MTP are in BACKLOG.md.
+
+**Then decided (user): memory accounting.** `ModelStore` measured live free memory, so existing
+caches were already counted on load. But it let loads use all of that memory, and it left
+prompt caches out of what evicting a model frees. Now:
+
+- loads leave a reserve of 8% of RAM, between 3 and 8 GB, as oMLX's balanced tier does;
+- prompt caches stop growing when the spare memory reaches zero and drop to the cache in use
+  below it;
+- caches count as reclaimable in the low-memory warning;
+- the sidebar's resident size includes them.
+
+A cache budget reserved at load time, the alternative, would have held back 2.6 GB per model on
+this 26 GB Mac whether or not it was used.
+
+**Found while measuring:** prefill really is slow here, at 62-69 tok/s with measured token
+counts, but a stuck Sublime Text crash handler used about 280% CPU during every run so far. The
+rerun is in BACKLOG.md.
 
 ## Open questions
 

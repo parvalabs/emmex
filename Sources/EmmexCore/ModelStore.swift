@@ -24,10 +24,13 @@ public actor ModelStore {
         public var id: String
         public var sizeBytes: Int64
     }
-    /// Resident models with their on-disk weight size (close to what they map in memory).
+    /// Resident models with their on-disk weight size (close to what they map in memory) plus
+    /// their prompt caches.
     public func residentModels() -> [Resident] {
-        residents.reversed().map { Resident(id: $0, sizeBytes: Self.size(of: directory(for: $0))) }
+        residents.reversed().map { Resident(id: $0, sizeBytes: Self.size(of: directory(for: $0)) + cacheBytes($0)) }
     }
+
+    func cacheBytes(_ id: String) -> Int64 { Int64(loaded[id]?.promptCacheBytes ?? 0) }
 
     /// Models used in place from a folder outside the library: id (`local/<name>`) → path.
     /// Their files belong to the user; removing one only unregisters it.
@@ -38,6 +41,8 @@ public actor ModelStore {
         self.root = root ?? Paths.cacheRoot.appending(path: "models")
         self.linkedFile = (root == nil ? Paths.appSupport : self.root).appending(path: "linked-models.json")
         self.linked = (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: linkedFile))) ?? [:]
+        // Prompt caches shrink when the system runs short, instead of pushing it into swap.
+        MLXLanguageModel.promptCacheHeadroom = { Int(SystemMemory.spare()) }
     }
 
     public struct Installed: Sendable, Identifiable {
@@ -131,7 +136,7 @@ public actor ModelStore {
             residents.removeAll { $0 == id }; residents.append(id)   // most recently used
         } else {
             let needed = Self.needed(for: directory(for: id))
-            while !residents.isEmpty, needed > SystemMemory.available() { await unload(residents[0]) }
+            while !residents.isEmpty, needed > SystemMemory.spare() { await unload(residents[0]) }
         }
         let model: MLXLanguageModel
         if let m = loaded[id] { model = m } else {
@@ -164,12 +169,13 @@ public actor ModelStore {
     public func unloadResident() async { if let id = residentID { await unload(id) } }
 
     /// How much memory loading `id` would need versus what the system can spare, counting the
-    /// residents that would be evicted to make room. An already-resident model needs nothing.
+    /// residents (weights and prompt caches) that would be evicted to make room. An
+    /// already-resident model needs nothing.
     public func headroom(for id: String) -> (needed: Int64, available: Int64) {
-        if residents.contains(id) { return (0, SystemMemory.available()) }
+        if residents.contains(id) { return (0, SystemMemory.spare()) }
         let needed = Self.needed(for: directory(for: id))
-        let reclaimable = residents.reduce(Int64(0)) { $0 + Self.needed(for: directory(for: $1)) }
-        return (needed, SystemMemory.available() + reclaimable)
+        let reclaimable = residents.reduce(Int64(0)) { $0 + Self.needed(for: directory(for: $1)) + cacheBytes($1) }
+        return (needed, SystemMemory.spare() + reclaimable)
     }
 
     /// Weights map at roughly their on-disk size; working memory adds a margin.

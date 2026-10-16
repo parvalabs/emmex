@@ -67,6 +67,16 @@ import Testing
         #expect(registry.entries(for: "m").map(ObjectIdentifier.init) == [ObjectIdentifier(a)])
     }
 
+    @Test func memoryPressureShrinksToTheEntryInUse() {
+        let registry = PromptCacheRegistry()
+        let a = entry(tokens: 8), b = entry(tokens: 8)
+        registry.touch(a, modelID: "m"); registry.touch(b, modelID: "m")
+        registry.trim(modelID: "m", keeping: b, maxEntries: 4, maxBytes: .max, headroom: 0)
+        #expect(registry.entries(for: "m").count == 2)
+        registry.trim(modelID: "m", keeping: b, maxEntries: 4, maxBytes: .max, headroom: -1)
+        #expect(registry.entries(for: "m").map(ObjectIdentifier.init) == [ObjectIdentifier(b)])
+    }
+
     @Test func branchCopyLeavesOriginalIntact() {
         let original = entry(tokens: 6)
         let copy = original.cache.map { $0.copy() }

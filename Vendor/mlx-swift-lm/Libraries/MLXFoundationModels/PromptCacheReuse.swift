@@ -34,6 +34,8 @@ final class PromptCacheRegistry: @unchecked Sendable {
     private var clock: UInt64 = 0
 
     private static let env = ProcessInfo.processInfo.environment
+    /// Set through `MLXLanguageModel.promptCacheHeadroom`.
+    nonisolated(unsafe) static var headroom: (@Sendable () -> Int)?
     /// `EMMEX_MLX_PROMPT_CACHE=0` turns reuse off (every request prefills everything).
     static let enabled: Bool = env["EMMEX_MLX_PROMPT_CACHE"] != "0"
     /// Cached prefixes kept per model (`EMMEX_MLX_PROMPT_CACHES`, default 4).
@@ -60,12 +62,20 @@ final class PromptCacheRegistry: @unchecked Sendable {
         entries[modelID]?.removeAll { $0 === entry }
     }
 
+    func bytes(for modelID: String) -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return (entries[modelID] ?? []).reduce(0) { $0 + $1.bytes }
+    }
+
     /// Evict least recently used entries other than `keeping` until the model is within budget.
-    func trim(modelID: String, keeping: PromptCacheEntry, maxEntries: Int = maxEntries, maxBytes: Int = maxBytes) {
+    /// `headroom` is memory the system can still spare; when it runs out, caches shrink.
+    func trim(modelID: String, keeping: PromptCacheEntry, maxEntries: Int = maxEntries, maxBytes: Int = maxBytes,
+              headroom: Int? = PromptCacheRegistry.headroom?()) {
         lock.lock(); defer { lock.unlock() }
         var list = (entries[modelID] ?? []).sorted { $0.lastUsed < $1.lastUsed }
         var total = list.reduce(0) { $0 + $1.bytes }
-        while list.count > 1, list.count > maxEntries || total > maxBytes,
+        let budget = headroom.map { $0 >= maxBytes ? maxBytes : min(maxBytes, total + $0) } ?? maxBytes
+        while list.count > 1, list.count > maxEntries || total > budget,
               let i = list.firstIndex(where: { $0 !== keeping }) {
             total -= list.remove(at: i).bytes
         }
@@ -74,6 +84,19 @@ final class PromptCacheRegistry: @unchecked Sendable {
 
     func remove(_ modelID: String) { lock.lock(); entries[modelID] = nil; lock.unlock() }
     func removeAll() { lock.lock(); entries.removeAll(); lock.unlock() }
+}
+
+@available(macOS 27.0, iOS 27.0, visionOS 27.0, *)
+extension MLXLanguageModel {
+    /// emmex patch: bytes this model's prompt caches hold.
+    public var promptCacheBytes: Int { PromptCacheRegistry.shared.bytes(for: modelID) }
+
+    /// emmex patch: bytes the system can still spare for prompt caches. When it is zero or less,
+    /// each model drops back to the cache in use. Unset means only the fixed budget applies.
+    public static var promptCacheHeadroom: (@Sendable () -> Int)? {
+        get { PromptCacheRegistry.headroom }
+        set { PromptCacheRegistry.headroom = newValue }
+    }
 }
 
 /// One request's reconciliation of the rendered prompt with the model's caches: which prefix is

@@ -86,14 +86,14 @@ that closed them rather than deleting them. Dates are when the item was added.
   (GatedDeltaNet) and rotating caches cannot be trimmed, so any edit to the transcript (a dropped
   thinking block, compaction) prefills everything again. Snapshot recurrent state at message
   boundaries and roll back to the last snapshot.
-- **Memory accounting for KV caches** (2026-10-15, from oMLX): `ModelStore.needed` counts only
-  the weights (×1.15). Count resident prompt caches too, and leave a reserve for the rest of the
-  system, as oMLX's ceilings do (8% of RAM, between 3 and 8 GB, by default).
 - **GPU keep-warm and MTP** (2026-10-15, from oMLX): measure whether a tiny kernel between turns
   removes the GPU wake-up stall on this Mac. Upstream mlx-swift-lm also ships an MTP drafter for
   Qwen3.5 that the FoundationModels adapter does not use yet.
-- **Slow prefill** (2026-10-15): the session-switch benchmark prefilled about 60 tok/s on
-  Qwen3-8B, against 170 tok/s measured on 2026-09-24. Find out why.
+- **Slow prefill** (2026-10-15): the session-switch benchmark prefilled 62-69 tok/s on Qwen3-8B
+  (measured token counts), against 170 tok/s on 2026-09-24. A stuck Sublime Text crash handler
+  was using about 280% CPU throughout and was stopped afterwards. Rerun
+  `EMMEX_MODE=switch EMMEX_REASONING=0 .build/release/spike-mlx` on a quiet machine. If it is
+  still slow, compare against plain `MLXLMCommon.generate` to rule out the adapter.
 
 ## App
 
@@ -133,6 +133,9 @@ that closed them rather than deleting them. Dates are when the item was added.
   0.4B encoder is 15 to 20 times faster than the 3B judge but much less accurate. Routing 48%
   vs 81%, and it rarely predicts frontier. Safety: 22 unsafe allows vs 8 for the 3B, or 4
   with a yes/no decomposition that asks needlessly on 14 of 26 safe commands.
+- **Memory accounting for KV caches** (2026-10-15): loads and prompt caches now leave a reserve
+  of 8% of RAM, between 3 and 8 GB, for the rest of the system. Evicting a model counts its
+  caches as reclaimable, and the sidebar size includes them.
 - **Several MLX prompt caches per model** (2026-10-15, `217e4ed`): switching sessions no longer
   discards the other session's cache. Qwen3-8B, switching back after 1.4K-token turns: first
   token 47-72 s → 25 s.

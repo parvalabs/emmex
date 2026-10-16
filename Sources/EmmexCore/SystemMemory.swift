@@ -17,6 +17,12 @@ public enum SystemMemory {
         return (Int64(stats.free_count) + Int64(stats.inactive_count) + Int64(stats.speculative_count)) * page
     }
 
+    /// Memory left for the rest of the system: 8% of RAM, between 3 and 8 GB (oMLX's default).
+    public static var reserve: Int64 { min(max(total * 8 / 100, 3 << 30), 8 << 30) }
+
+    /// What models and their caches may still take: available memory minus the reserve.
+    public static func spare() -> Int64 { available() - reserve }
+
     /// This process's physical footprint (what Activity Monitor shows as Memory).
     public static func footprint() -> Int64 {
         var info = task_vm_info_data_t()
