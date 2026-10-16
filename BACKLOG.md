@@ -127,6 +127,9 @@ that closed them rather than deleting them. Dates are when the item was added.
   0.4B encoder is 15 to 20 times faster than the 3B judge but much less accurate. Routing 48%
   vs 81%, and it rarely predicts frontier. Safety: 22 unsafe allows vs 8 for the 3B, or 4
   with a yes/no decomposition that asks needlessly on 14 of 26 safe commands.
+- **MLX prompt caches on SSD** (2026-10-15, done 2026-10-16, `ee32f50`): 256-token blocks under
+  `~/.cache/emmex/prompt-cache`. On Qwen3-8B the first turn after a restart takes 0.7 s instead
+  of 25.4 s, and the next turn after an unload 9.9 s instead of 34.2 s.
 - **Slow prefill** (2026-10-15, no code change): 62-69 tok/s was a stuck Sublime Text crash
   handler at about 280% CPU. With it stopped, Qwen3-8B prefills 143-173 tok/s again.
 - **Memory accounting for KV caches** (2026-10-15, `53c8551`): loads and prompt caches now leave a reserve

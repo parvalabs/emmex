@@ -549,7 +549,7 @@ about 2.5 times too slow.
 blocks, one safetensors file each. Each file is named by a SHA-256 chained over every token up
 to the end of its block, so a turn writes only its new blocks. When the best in-memory match is
 shorter, the longest stored run of blocks that the prompt begins with is loaded instead of
-prefilled.
+prefilled (`ee32f50`).
 
 - Each model has its own folder, keyed by a signature of `config.json` and the weight files'
   names, sizes and dates, so replaced weights never load a stale cache.
